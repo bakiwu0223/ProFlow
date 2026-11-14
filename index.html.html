@@ -1,0 +1,2514 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProFlow | 破解流程 - 專案管理與成效核對中樞</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel/CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --ink: #27313d; --muted: #697584; --line: #dfe5eb; --bg: #f5f7fa; --accent: #365e8d; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', 'Noto Sans TC', system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; margin: 0; }
+        button, input, select, textarea { font: inherit; }
+        .saas-card {
+            background: #ffffff;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.02);
+        }
+        .nav-pill { color: #475569; border-radius: 9px; transition: all 0.15s ease; }
+        .nav-pill:hover { background-color: #edf2f7; color: #0f172a; }
+        .nav-pill-active {
+            background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+            color: #365e8d;
+            font-weight: 650;
+        }
+        .glass-header {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--line);
+        }
+        .calendar-shell{overflow:auto;border-radius:12px;border:1px solid var(--line);background:#fff}
+        .weekhead,.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:850px}
+        .weekhead{background:#eef2f6}
+        .weekhead div{padding:11px;text-align:center;font-size:12px;font-weight:650;border-right:1px solid var(--line)}
+        .day{min-height:150px;border-top:1px solid var(--line);border-right:1px solid var(--line);padding:7px;min-width:0}
+        .day:nth-child(7n){border-right:0}
+        .day.out{background:#f8fafc}
+        .day.out .daynum{color:#9ca5af}
+        .daytop{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+        .daynum{font-weight:700;border:0;background:transparent;padding:3px 6px;border-radius:6px;cursor:pointer}
+        .daynum.today{background:var(--accent);color:#fff}
+        .addday{border:0;background:transparent;color:#8591a0;padding:2px 7px;font-size:18px;cursor:pointer}
+        .card{margin-bottom:7px;border:1px solid var(--pborder);border-left:4px solid var(--p);border-radius:8px;background:var(--pbg);padding:8px;color:#25313c;overflow-wrap:anywhere}
+        .card.done{opacity:.65}
+        .card.done .task{text-decoration:line-through}
+        .card.selected{outline:2px solid var(--accent);outline-offset:1px}
+        .cardhead{display:flex;justify-content:space-between;align-items:start;gap:6px;flex-wrap:wrap}
+        .project{font-size:12px;font-weight:750;color:var(--p)}
+        .cardopen{display:block;width:100%;text-align:left;padding:0;background:transparent;border:0;border-radius:0;cursor:pointer}
+        .task{font-size:13px;line-height:1.55;margin:5px 0}
+        .meta{font-size:11px;color:#596574;line-height:1.6}
+        .checkline,.selectline{display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap}
+        .selectline{margin:0 0 7px;cursor:pointer;color:#596574;width:fit-content}
+        .badge{border-radius:5px;background:#ffffffa6;padding:1px 5px}
+    </style>
+</head>
+<body class="antialiased flex flex-col md:flex-row min-h-screen overflow-x-hidden">
+
+    <!-- Firebase Authentication 登入層：未登入時遮住整個工作區 -->
+    <div id="authLockScreen" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-7 space-y-5">
+            <div class="flex flex-col items-center text-center space-y-2">
+                <div class="w-12 h-12 rounded-2xl bg-blue-700 text-white flex items-center justify-center shadow-lg">
+                    <i data-lucide="lock-keyhole" class="w-6 h-6"></i>
+                </div>
+                <h2 id="authTitle" class="font-display text-xl font-bold text-slate-900">ProFlow 安全登入</h2>
+                <p id="authSubtitle" class="text-xs text-slate-500">請使用你的 Firebase 帳號登入以讀取雲端專案資料</p>
+            </div>
+            <form id="authLoginForm" class="space-y-3" onsubmit="event.preventDefault(); handleAuthSubmit();">
+                <div>
+                    <label for="authEmailInput" class="block text-xs font-semibold text-slate-700 mb-1">電子郵件</label>
+                    <input id="authEmailInput" type="email" autocomplete="username" required placeholder="請輸入登入 Email" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
+                </div>
+                <div>
+                    <label for="authPasswordInput" class="block text-xs font-semibold text-slate-700 mb-1">密碼</label>
+                    <input id="authPasswordInput" type="password" autocomplete="current-password" required placeholder="請輸入密碼" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
+                </div>
+                <div id="authErrorMsg" class="hidden text-xs text-rose-600 font-medium bg-rose-50 px-3 py-2 rounded-lg"></div>
+                <button type="submit" id="authSubmitBtn" class="w-full bg-blue-700 hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm py-2.5 rounded-xl shadow-sm transition">
+                    登入 ProFlow
+                </button>
+                <button type="button" onclick="sendPasswordResetEmail()" class="w-full text-xs text-blue-700 hover:text-blue-900 font-medium py-1">
+                    忘記密碼？寄送重設密碼信
+                </button>
+            </form>
+            <div class="text-[11px] text-center text-slate-400 leading-relaxed">
+                此系統僅供帳號擁有者使用。首次使用請先在 Firebase Console 建立你的 Email/Password 帳號。
+            </div>
+        </div>
+    </div>
+
+    <!-- 側邊欄 -->
+    <aside class="w-full md:w-72 shrink-0 bg-white border-r border-slate-200 flex flex-col justify-between md:h-screen md:sticky md:top-0 z-30">
+        <div class="p-4 space-y-6 overflow-y-auto">
+            <div class="flex items-center justify-between px-1">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-blue-700 text-white flex items-center justify-center shadow-md shrink-0">
+                        <i data-lucide="compass" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="font-display text-sm font-bold text-slate-900">ProFlow</div>
+                        <div class="text-[11px] text-slate-400">破解流程 · 專案管理中樞</div>
+                    </div>
+                </div>
+                <button onclick="openNewProjectModal()" title="新增專案" class="w-8 h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-600 transition">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <nav class="space-y-1 text-[13px]">
+                <div class="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Workspace</div>
+                <button onclick="switchTab('dashboard')" data-tab="dashboard" class="tab-btn nav-pill nav-pill-active w-full px-3 py-2.5 flex items-center gap-2.5 text-left">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i><span>Dashboard 總覽與待辦</span>
+                </button>
+                <button onclick="switchTab('projectDetail')" data-tab="projectDetail" class="tab-btn nav-pill w-full px-3 py-2.5 flex items-center gap-2.5 text-left">
+                    <i data-lucide="file-check-2" class="w-4 h-4 shrink-0"></i><span>專案規格與 KPI 核對</span>
+                </button>
+                <button onclick="switchTab('calendar')" data-tab="calendar" class="tab-btn nav-pill w-full px-3 py-2.5 flex items-center gap-2.5 text-left">
+                    <i data-lucide="calendar-days" class="w-4 h-4 shrink-0"></i><span>專案總覽排程月曆</span>
+                </button>
+                <button onclick="switchTab('vendorsWriters')" data-tab="vendorsWriters" class="tab-btn nav-pill w-full px-3 py-2.5 flex items-center gap-2.5 text-left">
+                    <i data-lucide="users" class="w-4 h-4 shrink-0"></i><span>派案寫手與帳號廠商</span>
+                </button>
+                <button onclick="switchTab('hotArticles')" data-tab="hotArticles" class="tab-btn nav-pill w-full px-3 py-2.5 flex items-center gap-2.5 text-left">
+                    <i data-lucide="flame" class="w-4 h-4 shrink-0"></i><span>熱門文章搜尋追蹤</span>
+                </button>
+
+                <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">標準資料庫</div>
+                <button onclick="switchTab('contractSpecs')" data-tab="contractSpecs" class="tab-btn nav-pill w-full px-3 py-2.5 flex items-center justify-between text-left">
+                    <span class="flex items-center gap-2.5"><i data-lucide="shield-check" class="w-4 h-4 text-blue-500 shrink-0"></i><span>客戶成效規格庫</span></span>
+                    <span class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-semibold">必達</span>
+                </button>
+                <button onclick="switchTab('internalKpis')" data-tab="internalKpis" class="tab-btn nav-pill w-full px-3 py-2.5 flex items-center justify-between text-left">
+                    <span class="flex items-center gap-2.5"><i data-lucide="target" class="w-4 h-4 text-emerald-500 shrink-0"></i><span>內部 KPI 與獎金庫</span></span>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-semibold">考核</span>
+                </button>
+
+                <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">執行中專案</div>
+                <div id="sidebarProjectList" class="space-y-1 max-h-36 overflow-y-auto px-1"></div>
+
+                <div class="px-3 pt-4 pb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <span>已結案資料</span>
+                    <span id="sidebarClosedCount" class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded">0</span>
+                </div>
+                <div id="sidebarClosedProjectList" class="space-y-1 max-h-32 overflow-y-auto px-1"></div>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-slate-100 text-xs text-slate-500 space-y-2.5 bg-slate-50/50">
+            <div class="flex items-center justify-between gap-2">
+                <button type="button" onclick="sendPasswordResetEmail()" class="flex-1 py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1 transition">
+                    <i data-lucide="key-round" class="w-3 h-3"></i><span>重設密碼</span>
+                </button>
+                <button type="button" onclick="logoutApp()" class="flex-1 py-1.5 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1 transition">
+                    <i data-lucide="log-out" class="w-3 h-3"></i><span>登出</span>
+                </button>
+            </div>
+            <div id="signedInUserLabel" class="text-[10px] text-slate-400 truncate">尚未登入</div>
+            <div class="flex items-center justify-between">
+                <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-slate-400" id="syncStatusDot"></span><span id="sidebarTodayLabel">2026-11-14</span></span>
+                <span id="cloudSyncLabel" class="text-[11px] font-medium text-slate-500">等待登入</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 主內容區 -->
+    <main class="flex-1 min-w-0 flex flex-col">
+        <header class="glass-header h-14 px-6 flex items-center justify-between sticky top-0 z-20">
+            <div class="flex items-center gap-2 text-xs">
+                <span class="text-slate-400">ProFlow (破解流程)</span>
+                <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-300"></i>
+                <span id="breadcrumbTitle" class="text-slate-800 font-semibold">Dashboard 總覽與待辦</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <select id="globalProjectSelect" onchange="switchProject(this.value)" class="bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"></select>
+            </div>
+        </header>
+
+        <div class="max-w-7xl w-full mx-auto px-6 py-8 flex-1">
+            <!-- Dashboard Tab -->
+            <section id="tab-dashboard" class="tab-content space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 class="font-display text-2xl font-bold text-slate-900">ProFlow 專案執行總覽</h1>
+                        <p class="text-xs text-slate-500 mt-1">即時掌握合約達成率、每日審核待辦與團隊預估獎金</p>
+                    </div>
+                    <button onclick="openNewProjectModal()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-2 w-fit">
+                        <i data-lucide="folder-plus" class="w-4 h-4"></i>建立新專案
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="saas-card p-5">
+                        <div class="text-xs text-slate-400 font-medium">執行中專案數</div>
+                        <div id="dashProjectCount" class="font-display text-2xl font-bold text-slate-900 mt-1">0</div>
+                        <div class="text-[11px] text-emerald-600 mt-2 flex items-center gap-1"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>即時同步排程</div>
+                    </div>
+                    <div class="saas-card p-5">
+                        <div class="text-xs text-slate-400 font-medium">客戶規格庫產品</div>
+                        <div id="dashSpecCount" class="font-display text-2xl font-bold text-blue-600 mt-1">0</div>
+                        <div class="text-[11px] text-slate-400 mt-2">支援 Excel 產品總表匯入</div>
+                    </div>
+                    <div class="saas-card p-5">
+                        <div class="text-xs text-slate-400 font-medium">待審核與追蹤項目</div>
+                        <div id="dashTodoCount" class="font-display text-2xl font-bold text-amber-600 mt-1">0</div>
+                        <div class="text-[11px] text-slate-400 mt-2">涵蓋寫手回稿與廠商上線</div>
+                    </div>
+                    <div class="saas-card p-5">
+                        <div class="text-xs text-slate-400 font-medium">本月預估 KPI 獎金</div>
+                        <div id="monthlyBonusTotalDisplay" class="font-display text-2xl font-bold text-emerald-600 mt-1">$0</div>
+                        <div class="text-[11px] text-slate-400 mt-2">依據 5 大獎金階梯試算</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="saas-card p-6 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="font-display text-base font-bold text-slate-900 flex items-center gap-2">
+                                    <i data-lucide="list-todo" class="w-4 h-4 text-blue-700"></i>每日待辦事項
+                                </h2>
+                                <div class="flex items-center gap-2">
+                                    <button id="bulkDelTodosBtn" onclick="bulkDeleteItems('todos')" class="hidden text-[11px] bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-lg font-medium transition">刪除已選 (<span id="selCount_todos">0</span>)</button>
+                                    <span class="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">主管審核清單</span>
+                                </div>
+                            </div>
+                            <div id="dailyTodoList" class="space-y-2 text-xs text-slate-600"></div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-slate-100 flex gap-2">
+                            <input id="newTodoInput" type="text" placeholder="新增今日待辦事項..." class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600">
+                            <button onclick="addDailyTodo()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs px-4 py-2 rounded-lg transition">新增</button>
+                        </div>
+                    </div>
+
+                    <div class="saas-card p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="font-display text-base font-bold text-slate-900 flex items-center gap-2">
+                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-600"></i>專案進度與達標總覽
+                            </h2>
+                            <div class="flex items-center gap-2">
+                                <button id="bulkDelProjectsBtn" onclick="bulkDeleteItems('projects')" class="hidden text-[11px] bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-lg font-medium transition">刪除已選專案 (<span id="selCount_projects">0</span>)</button>
+                                <span class="text-[11px] text-slate-400">可勾選刪除</span>
+                            </div>
+                        </div>
+                        <div id="dashboardProjectsOverview" class="space-y-3 text-xs text-slate-600"></div>
+                    </div>
+                </div>
+
+                <!-- 已結案專案資料區塊 -->
+                <div class="saas-card p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <h2 class="font-display text-base font-bold text-slate-900 flex items-center gap-2">
+                                <i data-lucide="archive" class="w-4 h-4 text-slate-500"></i>已結案專案資料庫
+                            </h2>
+                            <p class="text-[11px] text-slate-400 mt-0.5">已完成結案歸檔之專案紀錄，可隨時點選檢視明細或還原為執行中</p>
+                        </div>
+                        <span id="closedProjectsBadge" class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-medium w-fit">共 0 筆已結案</span>
+                    </div>
+                    <div id="dashboardClosedProjectsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs text-slate-600"></div>
+                </div>
+            </section>
+
+            <!-- Calendar Tab (Using Becky/ProFlow user layout) -->
+            <section id="tab-calendar" class="tab-content hidden space-y-6">
+                <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 class="font-display text-2xl font-bold text-slate-900">專案總覽排程月曆</h1>
+                        <p class="text-xs text-slate-500 mt-1">專案各自分色 · 卡片分類 · 完成核實 · 離線使用</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="cursor-pointer border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3.5 py-2 text-xs font-medium inline-flex items-center gap-1.5">
+                            <i data-lucide="upload" class="w-3.5 h-3.5"></i>匯入卡片總表 (XLSX/CSV)
+                            <input type="file" accept=".xlsx,.csv" multiple onchange="handleImportCalendarCards(event)" class="hidden">
+                        </label>
+                        <button type="button" onclick="openEditor()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>＋ 新增卡片
+                        </button>
+                        <button type="button" onclick="exportCalendarCardsCsv()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3.5 py-2 text-xs font-medium inline-flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>匯出卡片 CSV
+                        </button>
+                    </div>
+                </header>
+
+                <div class="saas-card p-6 space-y-4">
+                    <!-- Filters -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                        <label class="flex flex-col gap-1 text-xs text-slate-500">專案
+                            <select id="projectFilter" onchange="renderCalendar()" class="border border-slate-300 rounded-lg p-2 text-xs bg-white"><option value="">全部專案</option></select>
+                        </label>
+                        <label class="flex flex-col gap-1 text-xs text-slate-500">卡片類型
+                            <select id="typeFilter" onchange="renderCalendar()" class="border border-slate-300 rounded-lg p-2 text-xs bg-white"><option value="">全部類型</option></select>
+                        </label>
+                        <label class="flex flex-col gap-1 text-xs text-slate-500">完成核實
+                            <select id="doneFilter" onchange="renderCalendar()" class="border border-slate-300 rounded-lg p-2 text-xs bg-white"><option value="">全部狀態</option><option value="no">尚未核實</option><option value="yes">已完成核實</option></select>
+                        </label>
+                        <label class="flex flex-col gap-1 text-xs text-slate-500">搜尋卡片
+                            <input id="search" oninput="renderCalendar()" placeholder="專案、任務、編號、說明…" type="search" class="border border-slate-300 rounded-lg p-2 text-xs bg-white">
+                        </label>
+                        <button type="button" onclick="resetFilters()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-lg p-2 text-xs font-medium">清除篩選</button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 pt-2" id="legend"></div>
+                </div>
+
+                <!-- Month Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="changeCalMonth(-1)" class="border border-slate-300 rounded-lg p-2 hover:bg-slate-50">‹</button>
+                        <h2 id="monthTitle" class="font-display text-lg font-bold text-slate-900 min-w-[140px] text-center">2026 年 11 月</h2>
+                        <button type="button" onclick="changeCalMonth(1)" class="border border-slate-300 rounded-lg p-2 hover:bg-slate-50">›</button>
+                        <input id="monthInput" type="month" onchange="onMonthInputChange(this.value)" class="border border-slate-300 rounded-lg p-1.5 text-xs">
+                        <button type="button" onclick="goToday()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs hover:bg-slate-50">本月</button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="summary" class="text-xs text-slate-500"></span>
+                        <select id="viewMode" onchange="renderCalendar()" class="border border-slate-300 rounded-lg p-1.5 text-xs bg-white">
+                            <option value="calendar">月曆檢視</option>
+                            <option value="list">當月清單</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Bulk Tools -->
+                <div class="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-3 text-xs">
+                    <span id="selectedCount" class="font-medium text-slate-600 mr-auto">已選 0 張</span>
+                    <button type="button" onclick="selectAllMonth()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-lg px-3 py-1.5">選取當月篩選結果</button>
+                    <button type="button" onclick="clearAllSelected()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-lg px-3 py-1.5">取消全部選取</button>
+                    <button type="button" onclick="deleteSelectedCards()" class="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 rounded-lg px-3 py-1.5 font-medium">刪除已選卡片</button>
+                    <button type="button" onclick="dedupeCards()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded-lg px-3 py-1.5">刪除重複卡片</button>
+                </div>
+
+                <!-- Calendar Shell / List -->
+                <div class="calendar-shell" id="calendarShell">
+                    <div class="weekhead">
+                        <div>星期一</div><div>星期二</div><div>星期三</div>
+                        <div>星期四</div><div>星期五</div><div>星期六</div><div>星期日</div>
+                    </div>
+                    <div class="calendar" id="calendar"></div>
+                </div>
+                <div id="listView" class="space-y-2" hidden></div>
+                <div id="emptyView" class="hidden py-12 text-center text-slate-400 saas-card">尚無符合條件的卡片</div>
+            </section>
+
+            <!-- Project Detail Tab -->
+            <section id="tab-projectDetail" class="tab-content hidden space-y-6">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="space-y-2">
+                        <div class="flex flex-wrap items-center gap-2.5">
+                            <h1 id="detailProjectName" class="font-display text-2xl font-bold text-slate-900">專案規格與 KPI 核對</h1>
+                            <span id="detailProjectStatusBadge" class="hidden px-2.5 py-0.5 rounded-full text-xs font-semibold"></span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <label for="detailProjectSelector" class="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                <i data-lucide="folder-search" class="w-3.5 h-3.5 text-blue-700"></i>切換檢視專案：
+                            </label>
+                            <select id="detailProjectSelector" onchange="switchProject(this.value)" class="bg-white border border-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 min-w-[220px] shadow-2xs"></select>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="toggleCloseProjectBtn" onclick="toggleCurrentProjectClosed()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5">
+                            <i data-lucide="archive" class="w-4 h-4"></i><span>標記為已結案</span>
+                        </button>
+                        <button id="bulkDelArticlesBtn" onclick="bulkDeleteItems('articles')" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>刪除已選文章 (<span id="selCount_articles">0</span>)
+                        </button>
+                        <button onclick="deleteCurrentProjectWithConfirm()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5">
+                            <i data-lucide="folder-x" class="w-4 h-4"></i>刪除此專案
+                        </button>
+                        <button onclick="openNewArticleModal()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5 w-fit">
+                            <i data-lucide="plus" class="w-4 h-4"></i>新增開文與規格設定
+                        </button>
+                    </div>
+                </div>
+
+                <div id="projectLinksBar" class="saas-card p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs"></div>
+
+                <div class="saas-card overflow-x-auto">
+                    <table class="w-full text-left text-xs min-w-[760px]">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-500">
+                            <tr>
+                                <th class="py-3 px-4 w-10"><input type="checkbox" onchange="toggleSelectAll('articles', this.checked)" class="rounded text-blue-700"></th>
+                                <th class="py-3 px-4">文章編號 / 切角</th>
+                                <th class="py-3 px-4">對應產品規格</th>
+                                <th class="py-3 px-4">上線日期</th>
+                                <th class="py-3 px-4">實績 (PV / 愛心 / 留言)</th>
+                                <th class="py-3 px-4">客戶規格狀態</th>
+                                <th class="py-3 px-4">內部 KPI 獎金</th>
+                                <th class="py-3 px-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectArticlesTableBody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Contract Specs Tab -->
+            <section id="tab-contractSpecs" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold mb-1">對外合約承諾底線</div>
+                        <h1 class="font-display text-2xl font-bold text-slate-900">客戶成效規格庫 (必達標準)</h1>
+                        <p class="text-xs text-slate-500 mt-1">支援直接匯入「產品總表」Excel / CSV（自動辨識：產品名稱、愛心、留言、PV數、引用、內容）</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="bulkDelSpecsBtn" onclick="bulkDeleteItems('contractSpecs')" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>刪除已選產品 (<span id="selCount_contractSpecs">0</span>)
+                        </button>
+                        <label class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl cursor-pointer transition inline-flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="upload" class="w-4 h-4"></i>匯入產品總表 (Excel/CSV)
+                            <input type="file" accept=".xlsx,.xls,.csv" onchange="handleImportProductMasterTable(event)" class="hidden">
+                        </label>
+                        <button onclick="openConfirmModal('確定要刪除全部產品規格嗎？此動作無法復原。', deleteAllContractSpecs)" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>刪除全部產品
+                        </button>
+                    </div>
+                </div>
+                <div class="saas-card overflow-x-auto">
+                    <table class="w-full text-left text-xs min-w-[700px]">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-500">
+                            <tr>
+                                <th class="py-3.5 px-4 w-10"><input type="checkbox" onchange="toggleSelectAll('contractSpecs', this.checked)" class="rounded text-blue-700"></th>
+                                <th class="py-3.5 px-4">產品名稱</th>
+                                <th class="py-3.5 px-4 text-blue-700">愛心</th>
+                                <th class="py-3.5 px-4 text-blue-700">留言</th>
+                                <th class="py-3.5 px-4 text-blue-700">PV數</th>
+                                <th class="py-3.5 px-4">引用</th>
+                                <th class="py-3.5 px-4">內容</th>
+                                <th class="py-3.5 px-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contractSpecsTableBody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Internal KPIs Tab (5 Bonus Modules) -->
+            <section id="tab-internalKpis" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold mb-1">團隊內部考核與獎金制度</div>
+                        <h1 class="font-display text-2xl font-bold text-slate-900">內部 KPI 標準與獎金庫</h1>
+                        <p class="text-xs text-slate-500 mt-1">支援 5 大獎金模組手動新增、修改與刪除，對應各類文章計算規則</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="bulkDelKpisBtn" onclick="bulkDeleteItems('internalKpis')" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>刪除已選 KPI 項目 (<span id="selCount_internalKpis">0</span>)
+                        </button>
+                        <button onclick="openConfirmModal('確定要還原預設的 5 大模組標準嗎？目前的調整將會被覆蓋。', resetInternalKpis)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-4 py-2.5 rounded-xl transition">還原預設 5 大模組標準</button>
+                    </div>
+                </div>
+                <div class="space-y-6" id="internalKpisContainer"></div>
+            </section>
+
+            <!-- Vendors & Writers Tab -->
+            <section id="tab-vendorsWriters" class="tab-content hidden space-y-6">
+                <h1 class="font-display text-2xl font-bold text-slate-900">派案寫手與帳號廠商</h1>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="saas-card p-6 space-y-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h2 class="font-display text-base font-bold text-slate-900">派案寫手進度追蹤</h2>
+                                <p class="text-[11px] text-slate-400">新增後將同步建立排程卡片至行事曆</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button id="bulkDelWritersBtn" onclick="bulkDeleteItems('writers')" class="hidden text-xs bg-rose-600 text-white hover:bg-rose-700 px-3 py-1.5 rounded-lg font-medium transition">刪除已選 (<span id="selCount_writers">0</span>)</button>
+                                <button onclick="openWriterModal()" class="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium">+ 新增派稿</button>
+                            </div>
+                        </div>
+                        <div id="writersListContainer" class="space-y-2 text-xs text-slate-600"></div>
+                    </div>
+                    <div class="saas-card p-6 space-y-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h2 class="font-display text-base font-bold text-slate-900">帳號廠商上線發包紀錄</h2>
+                                <p class="text-[11px] text-slate-400">追蹤發包單號與預計上線時程</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button id="bulkDelVendorsBtn" onclick="bulkDeleteItems('vendors')" class="hidden text-xs bg-rose-600 text-white hover:bg-rose-700 px-3 py-1.5 rounded-lg font-medium transition">刪除已選 (<span id="selCount_vendors">0</span>)</button>
+                                <button onclick="openVendorModal()" class="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium">+ 新增發包</button>
+                            </div>
+                        </div>
+                        <div id="vendorsListContainer" class="space-y-2 text-xs text-slate-600"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Hot Articles Tab -->
+            <section id="tab-hotArticles" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 class="font-display text-2xl font-bold text-slate-900">熱門文章搜尋追蹤</h1>
+                        <p class="text-xs text-slate-500 mt-1">每週三確認客戶審核狀況、每週五前確認連結置入上線</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="bulkDelHotArticlesBtn" onclick="bulkDeleteItems('hotArticles')" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition">刪除已選貼文 (<span id="selCount_hotArticles">0</span>)</button>
+                        <button onclick="openHotArticleModal()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition">+ 新增熱門貼文</button>
+                    </div>
+                </div>
+                <div class="saas-card p-6">
+                    <div id="hotArticlesListContainer" class="space-y-2 text-xs text-slate-600"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 卡片編輯 Modal (Becky 專案月曆原本的編輯視窗) -->
+    <div id="editorModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 id="editorModalTitle" class="font-display text-base font-bold text-slate-900">新增／編輯卡片</h3>
+                <button onclick="closeEditorModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 text-xs">
+                <input type="hidden" id="editCardKey">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block font-semibold mb-1">專案 *</label><input id="fProject" list="projectOptions" class="w-full border border-slate-200 rounded-lg p-2"><datalist id="projectOptions"></datalist></div>
+                    <div><label class="block font-semibold mb-1">卡片類型 *</label><input id="fType" list="typeOptions" class="w-full border border-slate-200 rounded-lg p-2"><datalist id="typeOptions"></datalist></div>
+                </div>
+                <div><label class="block font-semibold mb-1">項目／任務 *</label><input id="fTask" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block font-semibold mb-1">日期 *</label><input id="fDate" type="date" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                    <div><label class="block font-semibold mb-1">時間</label><input id="fTime" placeholder="15:00–16:00" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block font-semibold mb-1">卡片編號</label><input id="fId" placeholder="自動編號" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                    <div><label class="block font-semibold mb-1">CUE表編號</label><input id="fCue" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                </div>
+                <div><label class="block font-semibold mb-1">階段</label><input id="fStage" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                <div><label class="block font-semibold mb-1">說明</label><textarea id="fNote" rows="3" class="w-full border border-slate-200 rounded-lg p-2"></textarea></div>
+                <div><label class="block font-semibold mb-1">本次異動</label><input id="fChange" class="w-full border border-slate-200 rounded-lg p-2"></div>
+                <div><label class="flex items-center gap-2 cursor-pointer font-semibold"><input id="fDone" type="checkbox" class="rounded text-blue-700">完成核實</label></div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+                <button type="button" id="modalDeleteBtn" onclick="deleteEditingCard()" class="text-rose-600 hover:underline font-medium hidden">刪除卡片</button>
+                <div class="flex items-center gap-2 ml-auto">
+                    <button type="button" onclick="closeEditorModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100">取消</button>
+                    <button type="button" onclick="saveCardFromModal()" class="px-4 py-2 rounded-xl bg-blue-700 text-white font-medium hover:bg-blue-800">儲存卡片</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用確認與表單彈窗 -->
+    <div id="customModalBackdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 id="customModalTitle" class="font-display text-lg font-bold text-slate-900">操作視窗</h3>
+            <div id="customModalBody" class="space-y-3 text-xs text-slate-600"></div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeCustomModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">取消</button>
+                <button id="customModalConfirmBtn" class="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white text-xs px-4 py-3 rounded-xl shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50">操作成功</div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth,
+            onAuthStateChanged,
+            signInWithEmailAndPassword,
+            signOut,
+            sendPasswordResetEmail
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getFirestore,
+            doc,
+            setDoc,
+            onSnapshot
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Web App config 可放在前端；這不是 Admin 私鑰。
+        // 請勿在此加入 service account JSON、private_key 或 Admin SDK 憑證。
+        const firebaseConfig = {
+            apiKey: "AIzaSyB3kdUlTpxNZ4ZB2GXiGkufx6W-E8uKk2Y",
+            authDomain: "proflow-e0c84.firebaseapp.com",
+            projectId: "proflow-e0c84",
+            storageBucket: "proflow-e0c84.firebasestorage.app",
+            messagingSenderId: "666429555427",
+            appId: "1:666429555427:web:f40cb56a8e35ae9f1dbbd6",
+            measurementId: "G-KTK68ERZBZ"
+        };
+
+        const firebaseApp = initializeApp(firebaseConfig);
+        const auth = getAuth(firebaseApp);
+        const db = getFirestore(firebaseApp);
+        const stateDocRef = doc(db, "proflow_workspace", "shared_state");
+
+        let currentUser = null;
+        let unsubscribeState = null;
+        let isRemoteUpdate = false;
+        let writeQueue = Promise.resolve();
+
+        function setSyncStatus(message, status = "offline") {
+            const labelEl = document.getElementById("cloudSyncLabel");
+            const dotEl = document.getElementById("syncStatusDot");
+            if (labelEl) labelEl.textContent = message;
+            if (dotEl) {
+                const color = status === "online" ? "bg-emerald-500 animate-pulse"
+                    : status === "error" ? "bg-rose-500"
+                    : status === "working" ? "bg-amber-500 animate-pulse"
+                    : "bg-slate-400";
+                dotEl.className = `w-2 h-2 rounded-full ${color}`;
+            }
+        }
+
+        function showLoginScreen(message = "", success = false) {
+            const screen = document.getElementById("authLockScreen");
+            const errorEl = document.getElementById("authErrorMsg");
+            const userLabel = document.getElementById("signedInUserLabel");
+            if (screen) {
+                screen.classList.remove("hidden");
+                screen.classList.add("flex");
+            }
+            if (userLabel) userLabel.textContent = "尚未登入";
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.remove("text-rose-600", "bg-rose-50", "text-emerald-700", "bg-emerald-50");
+                errorEl.classList.add(success ? "text-emerald-700" : "text-rose-600");
+                errorEl.classList.add(success ? "bg-emerald-50" : "bg-rose-50");
+                errorEl.classList.toggle("hidden", !message);
+            }
+            setSyncStatus("請先登入", "offline");
+            try { window.lucide?.createIcons?.(); } catch (e) {}
+        }
+
+        function hideLoginScreen(user) {
+            const screen = document.getElementById("authLockScreen");
+            const errorEl = document.getElementById("authErrorMsg");
+            const userLabel = document.getElementById("signedInUserLabel");
+            if (screen) {
+                screen.classList.add("hidden");
+                screen.classList.remove("flex");
+            }
+            if (errorEl) {
+                errorEl.textContent = "";
+                errorEl.classList.add("hidden");
+            }
+            if (userLabel) userLabel.textContent = `登入中：${user.email || user.uid}`;
+        }
+
+        function authErrorMessage(error) {
+            const code = error?.code || "";
+            if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
+                return "Email 或密碼錯誤，請重新確認。";
+            }
+            if (code === "auth/too-many-requests") return "登入嘗試次數過多，請稍後再試。";
+            if (code === "auth/network-request-failed") return "網路連線失敗，請檢查網路後重試。";
+            if (code === "auth/operation-not-allowed") return "Firebase 尚未啟用 Email/Password 登入方式。";
+            if (code === "auth/invalid-email") return "Email 格式不正確。";
+            return `登入失敗：${error?.message || "未知錯誤"}`;
+        }
+
+        window.handleAuthSubmit = async function () {
+            const email = document.getElementById("authEmailInput")?.value.trim();
+            const password = document.getElementById("authPasswordInput")?.value || "";
+            const errorEl = document.getElementById("authErrorMsg");
+            const button = document.getElementById("authSubmitBtn");
+
+            if (!email || !password) {
+                showLoginScreen("請輸入 Email 和密碼。");
+                return;
+            }
+
+            if (button) {
+                button.disabled = true;
+                button.textContent = "登入中…";
+            }
+            if (errorEl) errorEl.classList.add("hidden");
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // 登入成功後由 onAuthStateChanged 啟動雲端同步。
+            } catch (error) {
+                console.error("Firebase sign-in failed:", error);
+                showLoginScreen(authErrorMessage(error));
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "登入 ProFlow";
+                }
+            }
+        };
+
+        window.logoutApp = async function () {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                console.error("Firebase sign-out failed:", error);
+                showToast("登出失敗，請稍後再試");
+            }
+        };
+
+        window.sendPasswordResetEmail = async function () {
+            const emailFromInput = document.getElementById("authEmailInput")?.value.trim();
+            const email = currentUser?.email || emailFromInput;
+            if (!email) {
+                showLoginScreen("請先輸入你的登入 Email，再點選重設密碼。");
+                return;
+            }
+            try {
+                await sendPasswordResetEmail(auth, email);
+                if (currentUser) {
+                    showToast(`已寄出密碼重設信至 ${email}`);
+                } else {
+                    showLoginScreen(`已寄出密碼重設信至 ${email}，請查看收件匣及垃圾郵件。`, true);
+                }
+            } catch (error) {
+                console.error("Password reset email failed:", error);
+                showToast("無法寄送重設密碼信，請確認 Email 或 Firebase 設定");
+            }
+        };
+
+        function applyRemoteState(parsed) {
+            const state = window.appState;
+            if (!state || !parsed || typeof parsed !== "object") {
+                throw new Error("雲端資料格式不正確");
+            }
+
+            isRemoteUpdate = true;
+            try {
+                // 保留 appState 原物件參照，避免全域 appState 與區域 appState 分家。
+                Object.keys(state).forEach((key) => {
+                    if (!(key in parsed)) delete state[key];
+                });
+                Object.assign(state, parsed);
+                delete state.accessPassHash; // 舊版前端密碼雜湊不再使用
+                window.persistLocalBackup?.();
+                window.renderAll?.();
+            } finally {
+                isRemoteUpdate = false;
+            }
+        }
+
+        async function pushStateToCloud() {
+            if (!db || !currentUser || isRemoteUpdate || !window.appState) return;
+
+            const cleanState = { ...window.appState };
+            delete cleanState.accessPassHash;
+            const payload = JSON.stringify(cleanState);
+            const payloadBytes = new TextEncoder().encode(payload).length;
+
+            // Firestore 單一文件有大小上限；預留空間避免寫入接近上限時失敗。
+            if (payloadBytes > 900000) {
+                setSyncStatus("資料量過大，請匯出備份並拆分資料", "error");
+                showToast("雲端資料超過單一文件安全容量，請先匯出備份");
+                return;
+            }
+
+            const writeData = {
+                payload,
+                updatedAt: Date.now(),
+                updatedBy: currentUser.uid
+            };
+
+            setSyncStatus("雲端儲存中…", "working");
+            writeQueue = writeQueue.catch(() => {}).then(() => setDoc(stateDocRef, writeData, { merge: true }));
+
+            try {
+                await writeQueue;
+                setSyncStatus("☁️ 雲端同步完成", "online");
+            } catch (error) {
+                console.error("Save to Firestore failed:", error);
+                setSyncStatus("⚠️ 雲端儲存失敗", "error");
+                showToast("雲端儲存失敗，資料仍保留在本機備份");
+            }
+        }
+
+        async function startCloudSync(user) {
+            if (unsubscribeState) {
+                unsubscribeState();
+                unsubscribeState = null;
+            }
+
+            return new Promise((resolve) => {
+                let firstSnapshotHandled = false;
+                const finishInitialLoad = () => {
+                    if (!firstSnapshotHandled) {
+                        firstSnapshotHandled = true;
+                        resolve();
+                    }
+                };
+
+                setSyncStatus("正在讀取雲端資料…", "working");
+
+                unsubscribeState = onSnapshot(stateDocRef, async (snapshot) => {
+                    try {
+                        if (snapshot.exists()) {
+                            const remoteData = snapshot.data();
+                            if (remoteData?.payload) {
+                                const parsed = JSON.parse(remoteData.payload);
+                                applyRemoteState(parsed);
+                            }
+                        } else {
+                            // 首次建立雲端文件時，先使用已載入的本機備份（若有）。
+                            const localBackup = localStorage.getItem("proflow_hub_v13");
+                            if (localBackup && window.appState) {
+                                try {
+                                    applyRemoteState(JSON.parse(localBackup));
+                                } catch (backupError) {
+                                    console.warn("Local backup could not be restored:", backupError);
+                                }
+                            }
+                            await pushStateToCloud();
+                        }
+
+                        setSyncStatus("☁️ 雲端即時同步中", "online");
+                    } catch (error) {
+                        console.error("Firestore snapshot processing failed:", error);
+                        setSyncStatus("⚠️ 雲端資料讀取失敗", "error");
+                    } finally {
+                        finishInitialLoad();
+                    }
+                }, (error) => {
+                    console.error("Firestore sync error:", error);
+                    if (error?.code === "permission-denied") {
+                        setSyncStatus("權限不足：請檢查 Firestore Rules", "error");
+                        showToast("Firestore 權限不足，請確認 Rules 中的 UID");
+                    } else {
+                        setSyncStatus("⚠️ 雲端連線異常", "error");
+                    }
+                    finishInitialLoad();
+                });
+            });
+        }
+
+        window.pushStateToCloud = pushStateToCloud;
+
+        window.initCloudSync = async function () {
+            return new Promise((resolve) => {
+                let firstAuthState = true;
+                onAuthStateChanged(auth, async (user) => {
+                    currentUser = user || null;
+
+                    if (user) {
+                        hideLoginScreen(user);
+                        await startCloudSync(user);
+                    } else {
+                        if (unsubscribeState) {
+                            unsubscribeState();
+                            unsubscribeState = null;
+                        }
+                        showLoginScreen();
+                    }
+
+                    if (firstAuthState) {
+                        firstAuthState = false;
+                        resolve();
+                    }
+                }, (error) => {
+                    console.error("Firebase auth state error:", error);
+                    showLoginScreen("無法確認登入狀態，請重新整理頁面。");
+                    if (firstAuthState) {
+                        firstAuthState = false;
+                        resolve();
+                    }
+                });
+            });
+        };
+    </script>
+
+    <script>
+        const STORAGE_KEY = 'proflow_hub_v13';
+
+        const BASE_PROJECTS = [
+            "Threads情報創作者經營","nac1","nac2","大井","大成","宇勝",
+            "宇足","安寶","寶貝可愛（未分碼）","展晟照明","廣和","拓霖",
+            "晶采","法兒貝","美無痕","美藍雷","設計先生","黃裳元吉"
+        ];
+        const BASE_TYPES = [
+            "其他事項","客回","客審","文案上線","會議","檢查","派案寫手",
+            "熱門文章客回／截止確認上線","熱門文章搜尋","熱門文章"
+        ];
+        const PALETTE = [
+            "#3366CC","#DD3366","#25846B","#946200","#777720","#8B4DB0",
+            "#34798C","#B85A2A","#00799E","#666666","#A34CA3","#666600",
+            "#B45A00","#238548","#B12C58","#4778A8","#927023","#663399"
+        ];
+
+        // 內部 KPI 5 大模組預設值
+        const DEFAULT_INTERNAL_KPIS = {
+            standard: [
+                { platform: 'Threads / FB / Dcard', views: 5000, likes: 50, comments: 10, bonus: 100 }
+            ],
+            matrix: [
+                { tier: '階1', threshold: 15000, deduction: 0, bonus: 250, cap: 1000 },
+                { tier: '階2', threshold: 30000, deduction: 0, bonus: 250, cap: '' },
+                { tier: '階3', threshold: 50000, deduction: 0, bonus: 250, cap: '' },
+                { tier: '階4', threshold: 80000, deduction: 0, bonus: 250, cap: '' }
+            ],
+            special: [
+                { item: 'Threads 特規 (單篇)', threshold: '20,000 PV', bonus: 300, cap: 1500 }
+            ],
+            indexSingle: [
+                { item: 'Threads 指標型文章 (單篇)', threshold: '20萬 PV, 1000 愛心, 30 留言', bonus: 500, cap: 2000 }
+            ],
+            diffusion: [
+                { item: 'Threads 擴散方案 (51篇加總)', threshold: '1指標 + 50矩陣 總PV 100萬', bonus: 2000, cap: 5000 }
+            ]
+        };
+
+        window.appState = {
+            currentProjectId: '',
+            contractSpecs: [],
+            internalKpis: JSON.parse(JSON.stringify(DEFAULT_INTERNAL_KPIS)),
+            projects: [],
+            todos: [],
+            calendarCards: [],
+            writers: [],
+            vendors: [],
+            hotArticles: []
+        };
+
+        // 本機備援：登入後若雲端文件尚不存在，可用這份資料初始化雲端。
+        try {
+            const localBackup = localStorage.getItem(STORAGE_KEY);
+            if (localBackup) {
+                const parsedBackup = JSON.parse(localBackup);
+                if (parsedBackup && typeof parsedBackup === 'object') {
+                    Object.assign(window.appState, parsedBackup);
+                    delete window.appState.accessPassHash;
+                }
+            }
+        } catch (error) {
+            console.warn('Local backup restore failed:', error);
+        }
+
+        let appState = window.appState;
+
+        let currentYear = 2026;
+        let currentMonth = 10; // 10 = 11月
+
+        // 全域多選狀態追蹤器
+        const selectedMap = {
+            todos: new Set(),
+            projects: new Set(),
+            articles: new Set(),
+            contractSpecs: new Set(),
+            internalKpis: new Set(),
+            calendarCards: new Set(),
+            writers: new Set(),
+            vendors: new Set(),
+            hotArticles: new Set()
+        };
+
+        function toggleSelectItem(category, id, checked) {
+            if (!selectedMap[category]) selectedMap[category] = new Set();
+            if (checked) selectedMap[category].add(id);
+            else selectedMap[category].delete(id);
+            updateBulkActionBars();
+        }
+
+        function toggleSelectAll(category, checked) {
+            if (!selectedMap[category]) selectedMap[category] = new Set();
+            selectedMap[category].clear();
+            if (checked) {
+                if (category === 'contractSpecs') {
+                    appState.contractSpecs.forEach(s => selectedMap.contractSpecs.add(s.id));
+                } else if (category === 'articles') {
+                    const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+                    if (proj && proj.articles) proj.articles.forEach(a => selectedMap.articles.add(a.id));
+                }
+            }
+            renderAll();
+        }
+
+        function updateBulkActionBars() {
+            const btnConfig = {
+                todos: 'bulkDelTodosBtn',
+                projects: 'bulkDelProjectsBtn',
+                articles: 'bulkDelArticlesBtn',
+                contractSpecs: 'bulkDelSpecsBtn',
+                internalKpis: 'bulkDelKpisBtn',
+                writers: 'bulkDelWritersBtn',
+                vendors: 'bulkDelVendorsBtn',
+                hotArticles: 'bulkDelHotArticlesBtn'
+            };
+            Object.keys(btnConfig).forEach(cat => {
+                const count = selectedMap[cat] ? selectedMap[cat].size : 0;
+                const btn = document.getElementById(btnConfig[cat]);
+                const countSpan = document.getElementById(`selCount_${cat}`);
+                if (countSpan) countSpan.textContent = count;
+                if (btn) {
+                    if (count > 0) btn.classList.remove('hidden');
+                    else btn.classList.add('hidden');
+                }
+            });
+        }
+
+        function bulkDeleteItems(category) {
+            const set = selectedMap[category];
+            if (!set || set.size === 0) return;
+            const count = set.size;
+            const names = {
+                todos: '待辦事項',
+                projects: '專案（含底下文章）',
+                articles: '專案文章',
+                contractSpecs: '客戶產品規格',
+                internalKpis: '內部 KPI 項目',
+                writers: '寫手派稿紀錄',
+                vendors: '廠商發包紀錄',
+                hotArticles: '熱門文章追蹤'
+            };
+            openConfirmModal(`確定要刪除已選取的 ${count} 筆「${names[category] || '項目'}」嗎？刪除後將無法復原。`, () => {
+                if (category === 'todos') {
+                    appState.todos = (appState.todos || []).filter(x => !set.has(x.id));
+                } else if (category === 'projects') {
+                    appState.projects = (appState.projects || []).filter(x => !set.has(x.id));
+                } else if (category === 'articles') {
+                    const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+                    if (proj && proj.articles) proj.articles = proj.articles.filter(x => !set.has(x.id));
+                } else if (category === 'contractSpecs') {
+                    appState.contractSpecs = (appState.contractSpecs || []).filter(x => !set.has(x.id));
+                } else if (category === 'writers') {
+                    appState.writers = (appState.writers || []).filter(x => !set.has(x.id));
+                } else if (category === 'vendors') {
+                    appState.vendors = (appState.vendors || []).filter(x => !set.has(x.id));
+                } else if (category === 'hotArticles') {
+                    appState.hotArticles = (appState.hotArticles || []).filter(x => !set.has(x.id));
+                } else if (category === 'internalKpis') {
+                    const kpi = appState.internalKpis || {};
+                    ['standard', 'matrix', 'special', 'indexSingle', 'diffusion'].forEach(mod => {
+                        if (Array.isArray(kpi[mod])) {
+                            kpi[mod] = kpi[mod].filter((_, idx) => !set.has(`${mod}_${idx}`));
+                        }
+                    });
+                }
+                set.clear();
+                saveState();
+                showToast(`已成功刪除 ${count} 筆資料`);
+            });
+        }
+
+        function deleteCurrentProjectWithConfirm() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) { showToast('目前沒有可刪除的專案'); return; }
+            openConfirmModal(`確定要刪除整個專案「${proj.name}」及其所有文章紀錄嗎？此動作無法復原。`, () => {
+                appState.projects = appState.projects.filter(p => p.id !== proj.id);
+                selectedMap.projects.delete(proj.id);
+                saveState();
+                showToast(`已刪除專案「${proj.name}」`);
+            });
+        }
+
+        function persistLocalBackup() {
+            try {
+                const backupState = { ...appState };
+                delete backupState.accessPassHash;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(backupState));
+            } catch (error) {
+                console.warn('Local backup failed:', error);
+            }
+        }
+        window.persistLocalBackup = persistLocalBackup;
+
+        function saveState() {
+            window.appState = appState;
+            persistLocalBackup();
+            if (typeof window.pushStateToCloud === 'function') {
+                window.pushStateToCloud();
+            }
+            renderAll();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2600);
+        }
+
+        function closeCustomModal() {
+            const modal = document.getElementById('customModalBackdrop');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function openConfirmModal(message, onConfirm) {
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '確認操作';
+            document.getElementById('customModalBody').innerHTML = `<p class="text-slate-700 leading-relaxed">${message}</p>`;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-medium hover:bg-rose-700';
+            btn.textContent = '確定刪除';
+            btn.onclick = () => {
+                onConfirm();
+                closeCustomModal();
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            const target = document.getElementById(`tab-${tabName}`);
+            if (target) target.classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.dataset.tab === tabName) btn.classList.add('nav-pill-active');
+                else btn.classList.remove('nav-pill-active');
+            });
+
+            const titles = {
+                dashboard: 'Dashboard 總覽與待辦',
+                projectDetail: '專案規格與 KPI 核對',
+                calendar: '專案總覽排程月曆',
+                vendorsWriters: '派案寫手與帳號廠商',
+                hotArticles: '熱門文章搜尋追蹤',
+                contractSpecs: '客戶成效規格庫',
+                internalKpis: '內部 KPI 與獎金庫'
+            };
+            const bc = document.getElementById('breadcrumbTitle');
+            if (bc) bc.textContent = titles[tabName] || tabName;
+            try { lucide.createIcons(); } catch(e) {}
+        }
+
+        function switchProject(id) {
+            appState.currentProjectId = id;
+            saveState();
+        }
+
+        function renderAll() {
+            renderSidebar();
+            renderDashboard();
+            renderContractSpecsTable();
+            renderInternalKpisView();
+            renderProjectDetail();
+            renderCalendar();
+            renderVendorsWriters();
+            renderHotArticles();
+            updateBulkActionBars();
+            try { lucide.createIcons(); } catch(e) {}
+        }
+
+        function renderSidebar() {
+            const sel = document.getElementById('globalProjectSelect');
+            const detailSel = document.getElementById('detailProjectSelector');
+            const sideList = document.getElementById('sidebarProjectList');
+            const closedSideList = document.getElementById('sidebarClosedProjectList');
+            const closedCountBadge = document.getElementById('sidebarClosedCount');
+
+            const activeProjects = appState.projects.filter(p => !p.closed);
+            const closedProjects = appState.projects.filter(p => p.closed);
+
+            if (closedCountBadge) closedCountBadge.textContent = closedProjects.length;
+
+            if (appState.projects.length === 0) {
+                sel.innerHTML = '<option value="">尚無專案（請先建立）</option>';
+                if (detailSel) detailSel.innerHTML = '<option value="">尚無專案（請先建立）</option>';
+                sideList.innerHTML = '<div class="px-3 py-2 text-[11px] text-slate-400">尚未建立任何專案</div>';
+                if (closedSideList) closedSideList.innerHTML = '<div class="px-3 py-1.5 text-[11px] text-slate-400">尚無已結案專案</div>';
+            } else {
+                if (!appState.currentProjectId || !appState.projects.some(p => p.id === appState.currentProjectId)) {
+                    appState.currentProjectId = (activeProjects[0] || closedProjects[0]).id;
+                }
+
+                let optHtml = '';
+                if (activeProjects.length > 0) {
+                    optHtml += `<optgroup label="執行中專案 (${activeProjects.length})">` +
+                        activeProjects.map(p => `<option value="${p.id}" ${p.id === appState.currentProjectId ? 'selected' : ''}>${p.name}</option>`).join('') +
+                        `</optgroup>`;
+                }
+                if (closedProjects.length > 0) {
+                    optHtml += `<optgroup label="已結案專案 (${closedProjects.length})">` +
+                        closedProjects.map(p => `<option value="${p.id}" ${p.id === appState.currentProjectId ? 'selected' : ''}>[已結案] ${p.name}</option>`).join('') +
+                        `</optgroup>`;
+                }
+
+                sel.innerHTML = optHtml;
+                if (detailSel) detailSel.innerHTML = optHtml;
+
+                sideList.innerHTML = activeProjects.length > 0
+                    ? activeProjects.map(p => `
+                        <button onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition ${p.id === appState.currentProjectId ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'}">
+                            • ${p.name}
+                        </button>
+                    `).join('')
+                    : '<div class="px-3 py-1.5 text-[11px] text-slate-400">無執行中專案</div>';
+
+                if (closedSideList) {
+                    closedSideList.innerHTML = closedProjects.length > 0
+                        ? closedProjects.map(p => `
+                            <button onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="w-full text-left px-3 py-1.5 rounded-lg text-xs truncate transition flex items-center justify-between gap-1 ${p.id === appState.currentProjectId ? 'bg-slate-200/70 text-slate-900 font-semibold' : 'text-slate-500 hover:bg-slate-50'}">
+                                <span class="truncate">✓ ${p.name}</span>
+                                <span class="text-[10px] text-slate-400 shrink-0">結案</span>
+                            </button>
+                        `).join('')
+                        : '<div class="px-3 py-1.5 text-[11px] text-slate-400">尚無已結案專案</div>';
+                }
+            }
+            const todaySpan = document.getElementById('sidebarTodayLabel');
+            if (todaySpan) todaySpan.textContent = new Date().toISOString().slice(0, 10);
+        }
+
+        function renderDashboard() {
+            const activeProjects = appState.projects.filter(p => !p.closed);
+            const closedProjects = appState.projects.filter(p => p.closed);
+
+            document.getElementById('dashProjectCount').textContent = activeProjects.length;
+            document.getElementById('dashSpecCount').textContent = appState.contractSpecs.length;
+            const pendingTodos = (appState.todos || []).filter(t => !t.done);
+            document.getElementById('dashTodoCount').textContent = pendingTodos.length;
+
+            let totalBonus = 0;
+            appState.projects.forEach(p => {
+                (p.articles || []).forEach(a => {
+                    totalBonus += Number(a.bonus || 0);
+                });
+            });
+            document.getElementById('monthlyBonusTotalDisplay').textContent = '$' + totalBonus.toLocaleString();
+
+            const todoEl = document.getElementById('dailyTodoList');
+            if (!appState.todos || appState.todos.length === 0) {
+                todoEl.innerHTML = '<div class="py-6 text-center text-slate-400">目前尚無待辦事項，可於下方新增</div>';
+            } else {
+                todoEl.innerHTML = appState.todos.map(t => `
+                    <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 gap-2">
+                        <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                            <input type="checkbox" title="選取刪除" ${selectedMap.todos.has(t.id) ? 'checked' : ''} onchange="toggleSelectItem('todos', '${t.id}', this.checked)" class="rounded text-rose-600">
+                            <label class="flex items-center gap-2 cursor-pointer flex-1 truncate">
+                                <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}')" class="rounded text-blue-700">
+                                <span class="${t.done ? 'line-through text-slate-400' : 'text-slate-800'} truncate">${t.text}</span>
+                            </label>
+                        </div>
+                        <button onclick="openConfirmModal('確定要刪除此待辦事項「${t.text.replace(/'/g, "\\'")}」嗎？', () => deleteTodo('${t.id}'))" class="text-slate-400 hover:text-rose-600 px-1.5 font-medium" title="刪除">✕</button>
+                    </div>
+                `).join('');
+            }
+
+            const projOverview = document.getElementById('dashboardProjectsOverview');
+            if (activeProjects.length === 0) {
+                projOverview.innerHTML = '<div class="py-6 text-center text-slate-400">尚無執行中專案，點擊右上角「建立新專案」開始使用</div>';
+            } else {
+                projOverview.innerHTML = activeProjects.map(p => {
+                    const total = Number(p.targetArticles || 1);
+                    const done = (p.articles || []).length;
+                    const pct = Math.min(100, Math.round((done / total) * 100));
+                    return `
+                        <div class="p-3 rounded-xl border border-slate-100 bg-slate-50/50 space-y-2">
+                            <div class="flex justify-between items-center font-semibold text-slate-800 gap-2">
+                                <label class="flex items-center gap-2 cursor-pointer truncate">
+                                    <input type="checkbox" ${selectedMap.projects.has(p.id) ? 'checked' : ''} onchange="toggleSelectItem('projects', '${p.id}', this.checked)" class="rounded text-rose-600">
+                                    <span onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="truncate hover:text-blue-700 hover:underline">${p.name}</span>
+                                </label>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <span class="text-blue-700">${done} / ${total} 篇 (${pct}%)</span>
+                                    <button onclick="openConfirmModal('確定將專案「${p.name.replace(/'/g, "\\'")}」歸檔至已結案資料嗎？', () => { toggleProjectClosedById('${p.id}', true); })" class="text-slate-500 hover:text-slate-800 text-[11px] font-normal">結案</button>
+                                    <button onclick="openConfirmModal('確定要刪除專案「${p.name.replace(/'/g, "\\'")}」嗎？', () => { appState.projects = appState.projects.filter(x => x.id !== '${p.id}'); saveState(); showToast('已刪除專案'); })" class="text-rose-600 hover:underline text-[11px] font-normal">刪除</button>
+                                </div>
+                            </div>
+                            <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-blue-700 rounded-full" style="width:${pct}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 渲染已結案專案資料區塊
+            const closedListEl = document.getElementById('dashboardClosedProjectsList');
+            const closedBadgeEl = document.getElementById('closedProjectsBadge');
+            if (closedBadgeEl) closedBadgeEl.textContent = `共 ${closedProjects.length} 筆已結案`;
+            if (closedListEl) {
+                if (closedProjects.length === 0) {
+                    closedListEl.innerHTML = '<div class="col-span-full py-6 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">目前尚無已結案專案，可於「專案規格與 KPI 核對」頁面點擊「標記為已結案」進行歸檔</div>';
+                } else {
+                    closedListEl.innerHTML = closedProjects.map(p => {
+                        const done = (p.articles || []).length;
+                        const total = Number(p.targetArticles || done || 0);
+                        const bonusSum = (p.articles || []).reduce((acc, a) => acc + Number(a.bonus || 0), 0);
+                        return `
+                            <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-2.5">
+                                <div class="space-y-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <span class="font-bold text-slate-800 truncate" title="${p.name}">${p.name}</span>
+                                        <span class="px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-semibold shrink-0">已結案</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500">結案日期：${p.closedDate || p.dueDate || '未記錄'} · 篇數：${done}/${total} 篇</div>
+                                    <div class="text-[11px] text-emerald-700 font-semibold">累計獎金：$${bonusSum.toLocaleString()}</div>
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200/70 text-[11px]">
+                                    <button onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="text-blue-700 hover:underline font-medium">查看規格與明細</button>
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="toggleProjectClosedById('${p.id}', false)" class="text-slate-600 hover:text-slate-900">還原執行</button>
+                                        <button onclick="openConfirmModal('確定要永久刪除已結案專案「${p.name.replace(/'/g, "\\'")}」嗎？', () => { appState.projects = appState.projects.filter(x => x.id !== '${p.id}'); saveState(); showToast('已刪除專案'); })" class="text-rose-600 hover:underline">刪除</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+        }
+
+        function addDailyTodo() {
+            const input = document.getElementById('newTodoInput');
+            const text = input.value.trim();
+            if (!text) return;
+            appState.todos = appState.todos || [];
+            appState.todos.push({ id: 'td_' + Date.now(), text, done: false });
+            input.value = '';
+            saveState();
+        }
+
+        function toggleTodo(id) {
+            const item = appState.todos.find(t => t.id === id);
+            if (item) item.done = !item.done;
+            saveState();
+        }
+
+        function deleteTodo(id) {
+            appState.todos = appState.todos.filter(t => t.id !== id);
+            saveState();
+        }
+
+        // ==================== 專案月曆邏輯 (Becky 版卡片整合) ====================
+        function getProjectsList() {
+            const set = new Set(BASE_PROJECTS);
+            (appState.calendarCards || []).forEach(c => { if (c.project) set.add(c.project); });
+            (appState.projects || []).forEach(p => { if (p.name) set.add(p.name); });
+            return Array.from(set);
+        }
+
+        function getTypesList() {
+            const set = new Set(BASE_TYPES);
+            (appState.calendarCards || []).forEach(c => { if (c.type) set.add(c.type); });
+            return Array.from(set);
+        }
+
+        function getCardColor(project) {
+            const idx = BASE_PROJECTS.indexOf(project);
+            if (idx >= 0) return PALETTE[idx % PALETTE.length];
+            let hash = 0;
+            for (let i = 0; i < (project || '').length; i++) hash = (hash * 31 + project.charCodeAt(i)) >>> 0;
+            return `hsl(${hash % 360} 43% 36%)`;
+        }
+
+        function refreshCalendarDropdowns() {
+            const projSel = document.getElementById('projectFilter');
+            const typeSel = document.getElementById('typeFilter');
+            const projOpts = document.getElementById('projectOptions');
+            const typeOpts = document.getElementById('typeOptions');
+
+            const curProj = projSel.value;
+            const curType = typeSel.value;
+
+            projSel.innerHTML = '<option value="">全部專案</option>' + getProjectsList().map(p => `<option value="${p}">${p}</option>`).join('');
+            typeSel.innerHTML = '<option value="">全部類型</option>' + getTypesList().map(t => `<option value="${t}">${t}</option>`).join('');
+            if (getProjectsList().includes(curProj)) projSel.value = curProj;
+            if (getTypesList().includes(curType)) typeSel.value = curType;
+
+            if (projOpts) projOpts.innerHTML = getProjectsList().map(p => `<option value="${p}">`).join('');
+            if (typeOpts) typeOpts.innerHTML = getTypesList().map(t => `<option value="${t}">`).join('');
+        }
+
+        function renderCalendar() {
+            refreshCalendarDropdowns();
+            const ym = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+            document.getElementById('monthTitle').textContent = `${currentYear} 年 ${currentMonth + 1} 月`;
+            document.getElementById('monthInput').value = ym;
+
+            const projFilter = document.getElementById('projectFilter').value;
+            const typeFilter = document.getElementById('typeFilter').value;
+            const doneFilter = document.getElementById('doneFilter').value;
+            const search = document.getElementById('search').value.trim().toLowerCase();
+
+            const cards = appState.calendarCards || [];
+            const filtered = cards.filter(c => {
+                if (projFilter && c.project !== projFilter) return false;
+                if (typeFilter && c.type !== typeFilter) return false;
+                if (doneFilter === 'yes' && !c.done) return false;
+                if (doneFilter === 'no' && c.done) return false;
+                if (search) {
+                    const text = [c.id, c.project, c.type, c.task, c.note, c.stage, c.cue, c.time].join(' ').toLowerCase();
+                    if (!text.includes(search)) return false;
+                }
+                return true;
+            });
+
+            const inMonth = filtered.filter(c => (c.date || '').startsWith(ym));
+            const completed = inMonth.filter(c => c.done).length;
+            document.getElementById('summary').textContent = `當月 ${inMonth.length} 張 · 已核實 ${completed} 張 · 總資料 ${cards.length} 張`;
+
+            // Legend
+            const legend = document.getElementById('legend');
+            legend.innerHTML = getProjectsList().map(p => {
+                const col = getCardColor(p);
+                const isActive = projFilter === p;
+                return `<button type="button" onclick="document.getElementById('projectFilter').value = '${projFilter === p ? '' : p}'; renderCalendar();" class="text-xs px-2.5 py-1 rounded border ${isActive ? 'ring-2 ring-blue-700' : ''}" style="border-left: 5px solid ${col}; background: color-mix(in srgb, ${col} 9%, white);">${p}</button>`;
+            }).join('');
+
+            const grid = document.getElementById('calendar');
+            const listDiv = document.getElementById('listView');
+            const emptyDiv = document.getElementById('emptyView');
+            const viewMode = document.getElementById('viewMode').value;
+
+            if (viewMode === 'list') {
+                document.getElementById('calendarShell').hidden = true;
+                listDiv.hidden = false;
+                listDiv.innerHTML = inMonth.map(c => renderCardHtml(c, true)).join('') || '<div class="py-12 text-center text-slate-400 saas-card">當月無符合條件的卡片</div>';
+                emptyDiv.hidden = true;
+            } else {
+                document.getElementById('calendarShell').hidden = false;
+                listDiv.hidden = true;
+
+                const firstDay = new Date(currentYear, currentMonth, 1);
+                const offset = (firstDay.getDay() + 6) % 7;
+                const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+                const todayStr = new Date().toISOString().slice(0, 10);
+
+                let html = '';
+                for (let i = 0; i < totalCells; i++) {
+                    const dayNum = i - offset + 1;
+                    const isCurrent = dayNum >= 1 && dayNum <= daysInMonth;
+                    const dateStr = isCurrent ? `${ym}-${String(dayNum).padStart(2, '0')}` : '';
+                    const dayCards = isCurrent ? filtered.filter(c => c.date === dateStr) : [];
+
+                    html += `
+                        <div class="day ${isCurrent ? '' : 'out'}">
+                            <div class="daytop">
+                                <button type="button" onclick="openEditor(null, '${dateStr}')" class="daynum ${dateStr === todayStr ? 'today' : ''}">${isCurrent ? dayNum : ''}</button>
+                                <button type="button" onclick="openEditor(null, '${dateStr}')" class="addday" title="新增卡片">＋</button>
+                            </div>
+                            <div class="space-y-1">
+                                ${dayCards.map(c => renderCardHtml(c, false)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                grid.innerHTML = html;
+                emptyDiv.hidden = filtered.length > 0;
+            }
+            document.getElementById('selectedCount').textContent = `已選 ${selectedMap.calendarCards.size} 張`;
+        }
+
+        function renderCardHtml(c, isList) {
+            const col = getCardColor(c.project);
+            const isSel = selectedMap.calendarCards.has(c.key);
+            return `
+                <article class="card ${c.done ? 'done' : ''} ${isSel ? 'selected' : ''}" style="--p: ${col}; --pbg: color-mix(in srgb, ${col} 9%, white); --pborder: color-mix(in srgb, ${col} 27%, white);">
+                    <label class="selectline">
+                        <input type="checkbox" ${isSel ? 'checked' : ''} onchange="toggleSelectItem('calendarCards', '${c.key}', this.checked); document.getElementById('selectedCount').textContent = '已選 ' + selectedMap.calendarCards.size + ' 張';"> 選取
+                    </label>
+                    <button type="button" onclick="openEditor('${c.key}')" class="cardopen">
+                        <div class="cardhead">
+                            <span class="badge">${c.type || '一般'}</span>
+                            <label class="checkline" onclick="event.stopPropagation()">
+                                <input type="checkbox" ${c.done ? 'checked' : ''} onchange="toggleCardDone('${c.key}')"> 完成核實
+                            </label>
+                        </div>
+                        <div class="project">${c.project}</div>
+                        <div class="task">${c.task}</div>
+                        <div class="meta">${[c.time, c.stage].filter(Boolean).join(' · ')}</div>
+                        <div class="meta">${c.id || '未填編號'}</div>
+                        ${isList ? `<div class="listdate text-xs font-semibold text-slate-500 mt-1">${c.date}</div>` : ''}
+                    </button>
+                </article>
+            `;
+        }
+
+        function toggleCardDone(key) {
+            const card = (appState.calendarCards || []).find(c => c.key === key);
+            if (card) {
+                card.done = !card.done;
+                saveState();
+            }
+        }
+
+        function changeCalMonth(delta) {
+            currentMonth += delta;
+            if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+            if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+            renderCalendar();
+        }
+
+        function onMonthInputChange(val) {
+            if (!val) return;
+            const [y, m] = val.split('-').map(Number);
+            currentYear = y;
+            currentMonth = m - 1;
+            renderCalendar();
+        }
+
+        function goToday() {
+            const d = new Date();
+            currentYear = d.getFullYear();
+            currentMonth = d.getMonth();
+            renderCalendar();
+        }
+
+        function resetFilters() {
+            document.getElementById('projectFilter').value = '';
+            document.getElementById('typeFilter').value = '';
+            document.getElementById('doneFilter').value = '';
+            document.getElementById('search').value = '';
+            renderCalendar();
+        }
+
+        function selectAllMonth() {
+            const ym = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+            (appState.calendarCards || []).forEach(c => {
+                if ((c.date || '').startsWith(ym)) selectedMap.calendarCards.add(c.key);
+            });
+            renderCalendar();
+        }
+
+        function clearAllSelected() {
+            selectedMap.calendarCards.clear();
+            renderCalendar();
+        }
+
+        function deleteSelectedCards() {
+            const count = selectedMap.calendarCards.size;
+            if (count === 0) return;
+            openConfirmModal(`確定要刪除已選取的 ${count} 張排程卡片嗎？`, () => {
+                appState.calendarCards = (appState.calendarCards || []).filter(c => !selectedMap.calendarCards.has(c.key));
+                selectedMap.calendarCards.clear();
+                saveState();
+                showToast(`已刪除 ${count} 張卡片`);
+            });
+        }
+
+        function dedupeCards() {
+            const seen = new Set();
+            const before = (appState.calendarCards || []).length;
+            appState.calendarCards = (appState.calendarCards || []).filter(c => {
+                const sig = `${c.date}|${c.project}|${c.task}|${c.id}`;
+                if (seen.has(sig)) return false;
+                seen.add(sig);
+                return true;
+            });
+            const removed = before - appState.calendarCards.length;
+            saveState();
+            showToast(`已清理 ${removed} 張重複卡片`);
+        }
+
+        // 開啟編輯／新增 Modal
+        function openEditor(key = null, defaultDate = null) {
+            refreshCalendarDropdowns();
+            const modal = document.getElementById('editorModal');
+            document.getElementById('editCardKey').value = key || '';
+            const delBtn = document.getElementById('modalDeleteBtn');
+
+            if (key) {
+                const c = (appState.calendarCards || []).find(x => x.key === key);
+                if (!c) return;
+                document.getElementById('editorModalTitle').textContent = '編輯排程卡片';
+                document.getElementById('fProject').value = c.project || '';
+                document.getElementById('fType').value = c.type || '';
+                document.getElementById('fTask').value = c.task || '';
+                document.getElementById('fDate').value = c.date || '';
+                document.getElementById('fTime').value = c.time || '';
+                document.getElementById('fId').value = c.id || '';
+                document.getElementById('fCue').value = c.cue || '';
+                document.getElementById('fStage').value = c.stage || '';
+                document.getElementById('fNote').value = c.note || '';
+                document.getElementById('fChange').value = c.change || '';
+                document.getElementById('fDone').checked = !!c.done;
+                delBtn.classList.remove('hidden');
+            } else {
+                document.getElementById('editorModalTitle').textContent = '新增排程卡片';
+                document.getElementById('fProject').value = '';
+                document.getElementById('fType').value = '';
+                document.getElementById('fTask').value = '';
+                document.getElementById('fDate').value = defaultDate || new Date().toISOString().slice(0, 10);
+                document.getElementById('fTime').value = '';
+                document.getElementById('fId').value = 'M' + String(Math.floor(Math.random() * 9000) + 1000);
+                document.getElementById('fCue').value = '';
+                document.getElementById('fStage').value = '';
+                document.getElementById('fNote').value = '';
+                document.getElementById('fChange').value = '';
+                document.getElementById('fDone').checked = false;
+                delBtn.classList.add('hidden');
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditorModal() {
+            const modal = document.getElementById('editorModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveCardFromModal() {
+            const key = document.getElementById('editCardKey').value;
+            const project = document.getElementById('fProject').value.trim();
+            const type = document.getElementById('fType').value.trim();
+            const task = document.getElementById('fTask').value.trim();
+            const date = document.getElementById('fDate').value;
+
+            if (!project || !type || !task || !date) {
+                showToast('請填寫必填欄位：專案、類型、任務與日期');
+                return;
+            }
+
+            const cardData = {
+                key: key || ('cc_' + Date.now() + Math.random()),
+                id: document.getElementById('fId').value.trim() || ('M' + Math.floor(Math.random()*9000+1000)),
+                date,
+                project,
+                type,
+                task,
+                cue: document.getElementById('fCue').value.trim(),
+                time: document.getElementById('fTime').value.trim(),
+                stage: document.getElementById('fStage').value.trim(),
+                note: document.getElementById('fNote').value.trim(),
+                change: document.getElementById('fChange').value.trim(),
+                done: document.getElementById('fDone').checked
+            };
+
+            appState.calendarCards = appState.calendarCards || [];
+            if (key) {
+                const idx = appState.calendarCards.findIndex(x => x.key === key);
+                if (idx >= 0) appState.calendarCards[idx] = cardData;
+            } else {
+                appState.calendarCards.push(cardData);
+            }
+            saveState();
+            closeEditorModal();
+            showToast('卡片已儲存');
+        }
+
+        function deleteEditingCard() {
+            const key = document.getElementById('editCardKey').value;
+            if (!key) return;
+            openConfirmModal('確定要刪除這張排程卡片嗎？', () => {
+                appState.calendarCards = (appState.calendarCards || []).filter(x => x.key !== key);
+                selectedMap.calendarCards.delete(key);
+                saveState();
+                closeEditorModal();
+                showToast('已刪除卡片');
+            });
+        }
+
+        function handleImportCalendarCards(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            let count = 0;
+            Array.from(files).forEach(file => {
+                file.arrayBuffer().then(buf => {
+                    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+                    wb.SheetNames.forEach(sn => {
+                        XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }).forEach(r => {
+                            let rawDate = String(r['日期'] || '').trim().replaceAll('/', '-');
+                            if (rawDate) {
+                                appState.calendarCards = appState.calendarCards || [];
+                                appState.calendarCards.push({
+                                    key: 'cc_' + Date.now() + Math.random(),
+                                    id: String(r['卡片編號'] || ''),
+                                    date: rawDate.slice(0, 10),
+                                    project: String(r['專案'] || ''),
+                                    type: String(r['分類'] || ''),
+                                    task: String(r['任務'] || ''),
+                                    cue: String(r['CUE表編號'] || ''),
+                                    time: String(r['時間'] || ''),
+                                    stage: String(r['階段'] || ''),
+                                    note: String(r['說明'] || ''),
+                                    done: String(r['完成核實'] || '') === '是' || r['完成核實'] === true
+                                });
+                                count++;
+                            }
+                        });
+                    });
+                    saveState();
+                    showToast(`成功匯入 ${count} 張排程卡片`);
+                });
+            });
+            e.target.value = '';
+        }
+
+        function exportCalendarCardsCsv() {
+            const rows = (appState.calendarCards || []).map(c => ({
+                '卡片編號': c.id, '日期': c.date, '專案': c.project, '分類': c.type,
+                '任務': c.task, 'CUE表編號': c.cue, '時間': c.time, '階段': c.stage,
+                '說明': c.note, '完成核實': c.done ? '是' : '否'
+            }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '卡片總表');
+            XLSX.writeFile(wb, 'ProFlow_卡片總表匯出.xlsx');
+        }
+
+        // ==================== 內部 KPI 與 5 大模組管理 ====================
+        function deleteSingleKpiRow(mod, idx) {
+            const kpi = appState.internalKpis || {};
+            if (Array.isArray(kpi[mod])) {
+                kpi[mod].splice(idx, 1);
+                selectedMap.internalKpis.delete(`${mod}_${idx}`);
+                saveState();
+                showToast('已刪除 KPI 項目');
+            }
+        }
+
+        function openKpiModal(mod, idx = -1) {
+            const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
+            if (!Array.isArray(kpi[mod])) kpi[mod] = [];
+            const isEdit = idx >= 0 && kpi[mod][idx];
+            const item = isEdit ? kpi[mod][idx] : {};
+
+            const modNames = {
+                standard: '🟦 一般文標準',
+                matrix: '🟪 Threads 矩陣 (每組 20 篇加總)',
+                special: '🟧 Threads 特規 (每篇單獨)',
+                indexSingle: '🟨 Threads 指標型文章 (單篇)',
+                diffusion: '🟩 Threads 擴散方案 (51篇加總)'
+            };
+
+            let fieldsHtml = '';
+            if (mod === 'standard') {
+                fieldsHtml = `
+                    <div><label class="block font-semibold mb-1">平台 *</label><input id="k_platform" type="text" value="${item.platform || ''}" placeholder="例如：Threads / FB / Dcard" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">觀看數</label><input id="k_views" type="number" value="${item.views ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">愛心數</label><input id="k_likes" type="number" value="${item.likes ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">留言數</label><input id="k_comments" type="number" value="${item.comments ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">每篇達標獎金 ($)</label><input id="k_bonus" type="number" value="${item.bonus ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                `;
+            } else if (mod === 'matrix') {
+                fieldsHtml = `
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">項目 / 階梯 *</label><input id="k_tier" type="text" value="${item.tier || ''}" placeholder="例如：階1" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">門檻 (加總PV) *</label><input id="k_threshold" type="number" value="${item.threshold ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">整組扣除</label><input id="k_deduction" type="number" value="${item.deduction ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">達標獎金 ($)</label><input id="k_bonus" type="number" value="${item.bonus ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">群組上限 ($)</label><input id="k_cap" type="number" value="${item.cap || ''}" placeholder="留空表示無" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                `;
+            } else {
+                fieldsHtml = `
+                    <div><label class="block font-semibold mb-1">項目名稱 *</label><input id="k_item" type="text" value="${item.item || ''}" placeholder="請輸入項目名稱" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">門檻 (內含規格) *</label><input id="k_threshold" type="text" value="${item.threshold || ''}" placeholder="例如：20萬 PV, 1000 愛心, 30 留言" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">達標獎金 ($)</label><input id="k_bonus" type="number" value="${item.bonus ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">${mod === 'diffusion' ? '群組上限 ($)' : '單篇上限 ($)'}</label><input id="k_cap" type="number" value="${item.cap || ''}" placeholder="留空表示無" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                `;
+            }
+
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = `${isEdit ? '修改' : '新增'} — ${modNames[mod]}`;
+            document.getElementById('customModalBody').innerHTML = `<div class="space-y-3">${fieldsHtml}</div>`;
+
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = isEdit ? '儲存修改' : '確認新增';
+            btn.onclick = () => {
+                let newObj = {};
+                if (mod === 'standard') {
+                    const platform = document.getElementById('k_platform').value.trim();
+                    if (!platform) { showToast('請輸入平台名稱'); return; }
+                    newObj = {
+                        platform,
+                        views: Number(document.getElementById('k_views').value) || 0,
+                        likes: Number(document.getElementById('k_likes').value) || 0,
+                        comments: Number(document.getElementById('k_comments').value) || 0,
+                        bonus: Number(document.getElementById('k_bonus').value) || 0
+                    };
+                } else if (mod === 'matrix') {
+                    const tier = document.getElementById('k_tier').value.trim();
+                    if (!tier) { showToast('請輸入項目名稱'); return; }
+                    const capVal = document.getElementById('k_cap').value;
+                    newObj = {
+                        tier,
+                        threshold: Number(document.getElementById('k_threshold').value) || 0,
+                        deduction: Number(document.getElementById('k_deduction').value) || 0,
+                        bonus: Number(document.getElementById('k_bonus').value) || 0,
+                        cap: capVal !== '' ? Number(capVal) : ''
+                    };
+                } else {
+                    const itemName = document.getElementById('k_item').value.trim();
+                    if (!itemName) { showToast('請輸入項目名稱'); return; }
+                    const capVal = document.getElementById('k_cap').value;
+                    newObj = {
+                        item: itemName,
+                        threshold: document.getElementById('k_threshold').value.trim(),
+                        bonus: Number(document.getElementById('k_bonus').value) || 0,
+                        cap: capVal !== '' ? Number(capVal) : ''
+                    };
+                }
+
+                if (isEdit) kpi[mod][idx] = newObj;
+                else kpi[mod].push(newObj);
+
+                appState.internalKpis = kpi;
+                saveState();
+                closeCustomModal();
+                showToast(isEdit ? '已更新 KPI 標準' : '已新增 KPI 標準');
+            };
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function renderInternalKpisView() {
+            const container = document.getElementById('internalKpisContainer');
+            if (!container) return;
+            const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
+            container.innerHTML = `
+                <div class="saas-card p-6 space-y-3 overflow-x-auto">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-display font-bold text-slate-900 text-sm">🟦 一般文 標準</h2>
+                        <button onclick="openKpiModal('standard')" class="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition">+ 新增標準</button>
+                    </div>
+                    <table class="w-full text-xs text-left min-w-[540px]">
+                        <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                            <tr><th class="py-2.5 px-3 w-10">選取</th><th class="py-2.5 px-3">平台</th><th class="py-2.5 px-3">觀看</th><th class="py-2.5 px-3">愛心</th><th class="py-2.5 px-3">留言</th><th class="py-2.5 px-3">每篇達標獎金</th><th class="py-2.5 px-3 text-right">操作</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${(kpi.standard || []).map((r, idx) => `<tr><td class="py-2.5 px-3"><input type="checkbox" ${selectedMap.internalKpis.has('standard_'+idx) ? 'checked' : ''} onchange="toggleSelectItem('internalKpis', 'standard_${idx}', this.checked)" class="rounded text-rose-600"></td><td class="py-2.5 px-3 font-medium">${r.platform}</td><td class="py-2.5 px-3">${Number(r.views).toLocaleString()}</td><td class="py-2.5 px-3">${r.likes}</td><td class="py-2.5 px-3">${r.comments}</td><td class="py-2.5 px-3 font-bold text-emerald-700">$${r.bonus}</td><td class="py-2.5 px-3 text-right space-x-2"><button onclick="openKpiModal('standard', ${idx})" class="text-blue-700 hover:underline font-medium">修改</button><button onclick="openConfirmModal('確定要刪除嗎？', () => deleteSingleKpiRow('standard', ${idx}))" class="text-rose-600 hover:underline">刪除</button></td></tr>`).join('') || '<tr><td colspan="7" class="py-6 text-center text-slate-400">尚無資料</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="saas-card p-6 space-y-3 overflow-x-auto">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-display font-bold text-slate-900 text-sm">🟪 Threads 矩陣 (每組 20 篇加總)</h2>
+                        <button onclick="openKpiModal('matrix')" class="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition">+ 新增矩陣階梯</button>
+                    </div>
+                    <table class="w-full text-xs text-left min-w-[540px]">
+                        <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                            <tr><th class="py-2.5 px-3 w-10">選取</th><th class="py-2.5 px-3">項目</th><th class="py-2.5 px-3">門檻</th><th class="py-2.5 px-3">整組扣除</th><th class="py-2.5 px-3">達標獎金</th><th class="py-2.5 px-3">群組上限</th><th class="py-2.5 px-3 text-right">操作</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${(kpi.matrix || []).map((r, idx) => `<tr><td class="py-2.5 px-3"><input type="checkbox" ${selectedMap.internalKpis.has('matrix_'+idx) ? 'checked' : ''} onchange="toggleSelectItem('internalKpis', 'matrix_${idx}', this.checked)" class="rounded text-rose-600"></td><td class="py-2.5 px-3 font-medium">${r.tier}</td><td class="py-2.5 px-3">${Number(r.threshold).toLocaleString()}</td><td class="py-2.5 px-3">${r.deduction}</td><td class="py-2.5 px-3 font-bold text-emerald-700">$${r.bonus}</td><td class="py-2.5 px-3">${r.cap ? '$'+Number(r.cap).toLocaleString() : '-'}</td><td class="py-2.5 px-3 text-right space-x-2"><button onclick="openKpiModal('matrix', ${idx})" class="text-blue-700 hover:underline font-medium">修改</button><button onclick="openConfirmModal('確定要刪除嗎？', () => deleteSingleKpiRow('matrix', ${idx}))" class="text-rose-600 hover:underline">刪除</button></td></tr>`).join('') || '<tr><td colspan="7" class="py-6 text-center text-slate-400">尚無資料</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="saas-card p-6 space-y-3 overflow-x-auto">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="font-display font-bold text-slate-900 text-sm">🟧 Threads 特規 (每篇單獨)</h2>
+                            <button onclick="openKpiModal('special')" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium shrink-0">+ 新增</button>
+                        </div>
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                <tr><th class="py-2 px-2 w-8">選</th><th class="py-2 px-2">項目</th><th class="py-2 px-2">門檻</th><th class="py-2 px-2">獎金 / 上限</th><th class="py-2 px-2 text-right">操作</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${(kpi.special || []).map((r, idx) => `<tr><td class="py-2 px-2"><input type="checkbox" ${selectedMap.internalKpis.has('special_'+idx) ? 'checked' : ''} onchange="toggleSelectItem('internalKpis', 'special_${idx}', this.checked)" class="rounded text-rose-600"></td><td class="py-2 px-2 font-medium">${r.item}</td><td class="py-2 px-2">${r.threshold}</td><td class="py-2 px-2 font-bold text-emerald-700">$${r.bonus}${r.cap ? ' <span class="text-[10px] font-normal text-slate-400">(上限$'+r.cap+')</span>' : ''}</td><td class="py-2 px-2 text-right space-x-1.5 whitespace-nowrap"><button onclick="openKpiModal('special', ${idx})" class="text-blue-700 hover:underline">改</button><button onclick="openConfirmModal('確定要刪除嗎？', () => deleteSingleKpiRow('special', ${idx}))" class="text-rose-600 hover:underline">刪</button></td></tr>`).join('') || '<tr><td colspan="5" class="py-4 text-center text-slate-400">尚無資料</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="saas-card p-6 space-y-3 overflow-x-auto">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="font-display font-bold text-slate-900 text-sm">🟨 Threads 指標型 (單篇)</h2>
+                            <button onclick="openKpiModal('indexSingle')" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium shrink-0">+ 新增</button>
+                        </div>
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                <tr><th class="py-2 px-2 w-8">選</th><th class="py-2 px-2">項目</th><th class="py-2 px-2">門檻</th><th class="py-2 px-2">獎金 / 上限</th><th class="py-2 px-2 text-right">操作</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${(kpi.indexSingle || []).map((r, idx) => `<tr><td class="py-2 px-2"><input type="checkbox" ${selectedMap.internalKpis.has('indexSingle_'+idx) ? 'checked' : ''} onchange="toggleSelectItem('internalKpis', 'indexSingle_${idx}', this.checked)" class="rounded text-rose-600"></td><td class="py-2 px-2 font-medium">${r.item}</td><td class="py-2 px-2">${r.threshold}</td><td class="py-2 px-2 font-bold text-emerald-700">$${r.bonus}${r.cap ? ' <span class="text-[10px] font-normal text-slate-400">(上限$'+r.cap+')</span>' : ''}</td><td class="py-2 px-2 text-right space-x-1.5 whitespace-nowrap"><button onclick="openKpiModal('indexSingle', ${idx})" class="text-blue-700 hover:underline">改</button><button onclick="openConfirmModal('確定要刪除嗎？', () => deleteSingleKpiRow('indexSingle', ${idx}))" class="text-rose-600 hover:underline">刪</button></td></tr>`).join('') || '<tr><td colspan="5" class="py-4 text-center text-slate-400">尚無資料</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="saas-card p-6 space-y-3 overflow-x-auto">
+                        <div class="flex items-center justify-between gap-2">
+                            <h2 class="font-display font-bold text-slate-900 text-sm">🟩 Threads 擴散方案 (51篇)</h2>
+                            <button onclick="openKpiModal('diffusion')" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium shrink-0">+ 新增</button>
+                        </div>
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                                <tr><th class="py-2 px-2 w-8">選</th><th class="py-2 px-2">項目</th><th class="py-2 px-2">門檻</th><th class="py-2 px-2">獎金 / 上限</th><th class="py-2 px-2 text-right">操作</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                ${(kpi.diffusion || []).map((r, idx) => `<tr><td class="py-2 px-2"><input type="checkbox" ${selectedMap.internalKpis.has('diffusion_'+idx) ? 'checked' : ''} onchange="toggleSelectItem('internalKpis', 'diffusion_${idx}', this.checked)" class="rounded text-rose-600"></td><td class="py-2 px-2 font-medium">${r.item}</td><td class="py-2 px-2">${r.threshold}</td><td class="py-2 px-2 font-bold text-emerald-700">$${r.bonus}${r.cap ? ' <span class="text-[10px] font-normal text-slate-400">(上限$'+r.cap+')</span>' : ''}</td><td class="py-2 px-2 text-right space-x-1.5 whitespace-nowrap"><button onclick="openKpiModal('diffusion', ${idx})" class="text-blue-700 hover:underline">改</button><button onclick="openConfirmModal('確定要刪除嗎？', () => deleteSingleKpiRow('diffusion', ${idx}))" class="text-rose-600 hover:underline">刪</button></td></tr>`).join('') || '<tr><td colspan="5" class="py-4 text-center text-slate-400">尚無資料</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function resetInternalKpis() {
+            appState.internalKpis = JSON.parse(JSON.stringify(DEFAULT_INTERNAL_KPIS));
+            saveState();
+            showToast('已還原預設 5 大模組標準');
+        }
+
+        // ==================== 專案規格與文章管理 ====================
+        function toggleProjectClosedById(projId, toClosed) {
+            const proj = appState.projects.find(p => p.id === projId);
+            if (!proj) return;
+            proj.closed = toClosed;
+            if (toClosed) {
+                proj.closedDate = new Date().toISOString().slice(0, 10);
+            } else {
+                delete proj.closedDate;
+            }
+            saveState();
+            showToast(toClosed ? `已將「${proj.name}」歸檔至已結案資料` : `已將「${proj.name}」還原為執行中專案`);
+        }
+
+        function toggleCurrentProjectClosed() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const nextState = !proj.closed;
+            if (nextState) {
+                openConfirmModal(`確定要將專案「${proj.name}」標記為已結案並移入已結案資料庫嗎？`, () => {
+                    toggleProjectClosedById(proj.id, true);
+                });
+            } else {
+                toggleProjectClosedById(proj.id, false);
+            }
+        }
+
+        function renderProjectDetail() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            const titleEl = document.getElementById('detailProjectName');
+            const statusBadge = document.getElementById('detailProjectStatusBadge');
+            const toggleCloseBtn = document.getElementById('toggleCloseProjectBtn');
+            const linksBar = document.getElementById('projectLinksBar');
+            const tbody = document.getElementById('projectArticlesTableBody');
+
+            if (!proj) {
+                titleEl.textContent = '專案規格與 KPI 核對（尚未選擇專案）';
+                if (statusBadge) statusBadge.classList.add('hidden');
+                if (toggleCloseBtn) toggleCloseBtn.classList.add('hidden');
+                linksBar.innerHTML = '<div class="col-span-4 text-slate-400">請先點擊左上角「+」建立專案，再進行文章與規格核對。</div>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">尚無專案資料</td></tr>';
+                return;
+            }
+
+            titleEl.textContent = proj.name + ' — 規格與 KPI 核對';
+            if (statusBadge) {
+                statusBadge.classList.remove('hidden');
+                if (proj.closed) {
+                    statusBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-700';
+                    statusBadge.textContent = `✓ 已結案 (${proj.closedDate || '已歸檔'})`;
+                } else {
+                    statusBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700';
+                    statusBadge.textContent = '● 執行中專案';
+                }
+            }
+            if (toggleCloseBtn) {
+                toggleCloseBtn.classList.remove('hidden');
+                toggleCloseBtn.innerHTML = proj.closed
+                    ? '<i data-lucide="rotate-ccw" class="w-4 h-4"></i><span>還原為執行中</span>'
+                    : '<i data-lucide="archive" class="w-4 h-4"></i><span>標記為已結案</span>';
+            }
+
+            linksBar.innerHTML = `
+                <a href="${proj.reqUrl || '#'}" target="_blank" onclick="if(!'${proj.reqUrl || ''}'){event.preventDefault(); showToast('尚未設定客戶需求表連結');}" class="p-3 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-between ${proj.reqUrl ? '' : 'opacity-60'}">
+                    <span class="font-semibold text-slate-700">📋 客戶需求表連結</span><i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
+                </a>
+                <a href="${proj.agendaUrl || '#'}" target="_blank" onclick="if(!'${proj.agendaUrl || ''}'){event.preventDefault(); showToast('尚未設定議程表連結');}" class="p-3 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-between ${proj.agendaUrl ? '' : 'opacity-60'}">
+                    <span class="font-semibold text-slate-700">🗂️ 議程表連結</span><i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
+                </a>
+                <a href="${proj.cueUrl || '#'}" target="_blank" onclick="if(!'${proj.cueUrl || ''}'){event.preventDefault(); showToast('尚未設定 CUE 表連結');}" class="p-3 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-between ${proj.cueUrl ? '' : 'opacity-60'}">
+                    <span class="font-semibold text-slate-700">📅 CUE表連結</span><i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
+                </a>
+                <a href="${proj.pmsUrl || '#'}" target="_blank" onclick="if(!'${proj.pmsUrl || ''}'){event.preventDefault(); showToast('尚未設定 PMS 連結');}" class="p-3 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-between ${proj.pmsUrl ? '' : 'opacity-60'}">
+                    <span class="font-semibold text-slate-700">⚙️ PMS連結</span><i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
+                </a>
+                ${(proj.extraLinks || []).map((lk, idx) => `
+                    <div class="p-3 rounded-xl border border-blue-100 bg-blue-50/40 hover:bg-blue-50 flex items-center justify-between gap-2">
+                        <a href="${lk.url || '#'}" target="_blank" class="font-semibold text-blue-800 truncate flex-1 flex items-center gap-1.5">
+                            <span>🔗 ${lk.label}</span>
+                            <i data-lucide="external-link" class="w-3 h-3 text-blue-500 shrink-0"></i>
+                        </a>
+                        <button onclick="openConfirmModal('確定要移除連結「${(lk.label || '').replace(/'/g, "\\'")}」嗎？', () => removeProjectExtraLink(${idx}))" class="text-slate-400 hover:text-rose-600 px-1" title="移除此連結">✕</button>
+                    </div>
+                `).join('')}
+                <button onclick="openAddProjectLinkModal()" class="p-3 rounded-xl border border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/30 text-slate-500 hover:text-blue-700 flex items-center justify-center gap-1.5 font-medium transition">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i><span>手動新增其他連結</span>
+                </button>
+            `;
+
+            const articles = proj.articles || [];
+            tbody.innerHTML = articles.map(a => {
+                const spec = appState.contractSpecs.find(s => s.name === a.specName) || { pv: 0, likes: 0, comments: 0 };
+                const pass = Number(a.pv || 0) >= Number(spec.pv || 0) && Number(a.likes || 0) >= Number(spec.likes || 0) && Number(a.comments || 0) >= Number(spec.comments || 0);
+                return `
+                    <tr class="hover:bg-slate-50 ${selectedMap.articles.has(a.id) ? 'bg-rose-50/40' : ''}">
+                        <td class="py-3 px-4"><input type="checkbox" ${selectedMap.articles.has(a.id) ? 'checked' : ''} onchange="toggleSelectItem('articles', '${a.id}', this.checked)" class="rounded text-rose-600"></td>
+                        <td class="py-3 px-4 font-bold text-slate-900">${a.code} <span class="font-normal text-slate-400">(${a.category || '一般'})</span></td>
+                        <td class="py-3 px-4 text-blue-700 font-medium">${a.specName || '-'}</td>
+                        <td class="py-3 px-4 text-slate-600">${a.publishDate || '-'}</td>
+                        <td class="py-3 px-4 font-mono text-slate-700">${Number(a.pv||0).toLocaleString()} / ${a.likes||0} / ${a.comments||0}</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${pass ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+                                ${pass ? '✓ 規格已達成' : '⏳ 追蹤中 / 未達'}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 font-bold text-emerald-700">$${Number(a.bonus || 0).toLocaleString()}</td>
+                        <td class="py-3 px-4 text-right"><button onclick="openConfirmModal('確定要刪除文章「${a.code.replace(/'/g, "\\'")}」嗎？', () => deleteProjectArticle('${a.id}'))" class="text-rose-600 hover:underline">刪除</button></td>
+                    </tr>
+                `;
+            }).join('') || `<tr><td colspan="8" class="text-center py-8 text-slate-400">尚無文章紀錄，請點擊右上方「新增開文與規格設定」</td></tr>`;
+        }
+
+        function deleteProjectArticle(artId) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            proj.articles = (proj.articles || []).filter(a => a.id !== artId);
+            saveState();
+            showToast('已刪除文章');
+        }
+
+        // ==================== 客戶成效規格庫與產品匯入 ====================
+        function renderContractSpecsTable() {
+            const tbody = document.getElementById('contractSpecsTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = appState.contractSpecs.map(s => `
+                <tr class="hover:bg-slate-50 transition ${selectedMap.contractSpecs.has(s.id) ? 'bg-rose-50/40' : ''}">
+                    <td class="py-3.5 px-4"><input type="checkbox" ${selectedMap.contractSpecs.has(s.id) ? 'checked' : ''} onchange="toggleSelectItem('contractSpecs', '${s.id}', this.checked)" class="rounded text-rose-600"></td>
+                    <td class="py-3.5 px-4 font-bold text-slate-900">${s.name}</td>
+                    <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.likes || 0).toLocaleString()}</td>
+                    <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.comments || 0).toLocaleString()}</td>
+                    <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.pv || 0).toLocaleString()}</td>
+                    <td class="py-3.5 px-4 text-slate-600">${s.quote || '-'}</td>
+                    <td class="py-3.5 px-4 text-slate-500 max-w-xs truncate" title="${s.note || ''}">${s.note || '-'}</td>
+                    <td class="py-3.5 px-4 text-right"><button onclick="openConfirmModal('確定要刪除產品「${s.name.replace(/'/g, "\\'")}」嗎？', () => deleteContractSpec('${s.id}'))" class="text-rose-600 hover:underline font-medium">刪除</button></td>
+                </tr>
+            `).join('') || `<tr><td colspan="8" class="text-center py-10 text-slate-400">尚無客戶規格，請點選上方藍色按鈕匯入《產品總表》Excel / CSV</td></tr>`;
+        }
+
+        async function handleImportProductMasterTable(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+                let count = 0;
+                wb.SheetNames.forEach(sn => {
+                    XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }).forEach(r => {
+                        const name = r['產品名稱'] || r['品名'] || Object.values(r)[0];
+                        if (name && String(name).trim() !== '產品名稱') {
+                            appState.contractSpecs.push({
+                                id: 'cs_' + Date.now() + Math.random(),
+                                name: String(name).trim(),
+                                likes: Number(String(r['愛心'] || 0).replace(/,/g, '')) || 0,
+                                comments: Number(String(r['留言'] || 0).replace(/,/g, '')) || 0,
+                                pv: Number(String(r['PV數'] || r['PV'] || 0).replace(/,/g, '')) || 0,
+                                quote: String(r['引用'] || '-'),
+                                note: String(r['內容'] || '')
+                            });
+                            count++;
+                        }
+                    });
+                });
+                saveState();
+                showToast(`成功匯入 ${count} 筆產品規格`);
+            } catch(err) {
+                showToast('匯入失敗，請確認檔案格式');
+            }
+            e.target.value = '';
+        }
+
+        function deleteContractSpec(id) {
+            appState.contractSpecs = appState.contractSpecs.filter(x => x.id !== id);
+            saveState();
+            showToast('已刪除產品規格');
+        }
+
+        function deleteAllContractSpecs() {
+            appState.contractSpecs = [];
+            saveState();
+            showToast('已清空全部產品規格');
+        }
+
+        // ==================== 派案寫手、廠商與熱門文章 ====================
+        function toggleWriterDone(id) {
+            const item = (appState.writers || []).find(w => w.id === id);
+            if (item) {
+                item.done = !item.done;
+                // 同步更新行事曆對應卡片的核實狀態
+                if (item.calCardKey) {
+                    const calCard = (appState.calendarCards || []).find(c => c.key === item.calCardKey);
+                    if (calCard) calCard.done = item.done;
+                }
+                saveState();
+            }
+        }
+
+        function deleteSingleWriter(id) {
+            const item = (appState.writers || []).find(w => w.id === id);
+            if (item && item.calCardKey) {
+                appState.calendarCards = (appState.calendarCards || []).filter(c => c.key !== item.calCardKey);
+                selectedMap.calendarCards.delete(item.calCardKey);
+            }
+            appState.writers = (appState.writers || []).filter(x => x.id !== id);
+            selectedMap.writers.delete(id);
+            saveState();
+            showToast('已刪除派稿紀錄');
+        }
+
+        function renderVendorsWriters() {
+            const wEl = document.getElementById('writersListContainer');
+            const vEl = document.getElementById('vendorsListContainer');
+            wEl.innerHTML = (appState.writers || []).map((w, idx) => {
+                if (!w.id) w.id = 'wr_' + idx + '_' + (w.writer || '');
+                const monthTag = w.month ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium">${w.month}</span>` : '';
+                const workTypeTag = w.workType ? `<span class="px-1.5 py-0.5 rounded ${w.workType === '企劃' ? 'bg-indigo-50 text-indigo-700' : 'bg-sky-50 text-sky-700'} text-[11px] font-semibold">${w.workType}</span>` : '';
+                return `
+                <div class="p-3 rounded-xl border border-slate-100 flex justify-between items-center gap-2 hover:bg-slate-50">
+                    <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                        <input type="checkbox" title="選取刪除" ${selectedMap.writers.has(w.id) ? 'checked' : ''} onchange="toggleSelectItem('writers', '${w.id}', this.checked)" class="rounded text-rose-600 shrink-0">
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="font-bold text-slate-900">${w.project}</span>
+                                <span class="text-slate-400">·</span>
+                                <span class="font-semibold text-blue-700">${w.writer}</span>
+                                ${monthTag}
+                                ${workTypeTag}
+                            </div>
+                            <div class="text-[11px] text-slate-500 flex items-center gap-2">
+                                <span>回稿日期：${w.due || '未設定'}</span>
+                                ${w.calCardKey ? '<span class="text-emerald-600 inline-flex items-center gap-0.5">📅 已同步月曆</span>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="toggleWriterDone('${w.id}')" class="px-2 py-0.5 rounded text-[11px] font-medium transition ${w.done ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}">${w.done ? '✓ 已回稿核實' : '⏳ 待回稿'}</button>
+                        <button onclick="openConfirmModal('確定要刪除此派稿紀錄（並同步移除行事曆卡片）嗎？', () => deleteSingleWriter('${w.id}'))" class="text-rose-600 hover:underline text-[11px]">刪除</button>
+                    </div>
+                </div>
+            `}).join('') || '<div class="text-center py-6 text-slate-400">尚無寫手派稿紀錄，點擊右上角「+ 新增派稿」即可同步建立行事曆排程</div>';
+
+            vEl.innerHTML = (appState.vendors || []).map((v, idx) => {
+                if (!v.id) v.id = 'vd_' + idx + '_' + (v.orderId || '');
+                return `
+                <div class="p-3 rounded-xl border border-slate-100 flex justify-between items-center gap-2 hover:bg-slate-50">
+                    <label class="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" ${selectedMap.vendors.has(v.id) ? 'checked' : ''} onchange="toggleSelectItem('vendors', '${v.id}', this.checked)" class="rounded text-rose-600">
+                        <div class="truncate"><span class="font-bold text-slate-800">${v.project}</span> · ${v.code} (單號：${v.orderId}) <span class="text-slate-400">上線：${v.date}</span></div>
+                    </label>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="px-2 py-0.5 rounded text-[11px] ${v.confirmed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${v.confirmed ? '已確認上線' : '未確認'}</span>
+                        <button onclick="openConfirmModal('確定要刪除嗎？', () => { appState.vendors = appState.vendors.filter(x => x.id !== '${v.id}'); selectedMap.vendors.delete('${v.id}'); saveState(); showToast('已刪除'); })" class="text-rose-600 hover:underline text-[11px]">刪除</button>
+                    </div>
+                </div>
+            `}).join('') || '<div class="text-center py-6 text-slate-400">尚無帳號廠商發包紀錄</div>';
+        }
+
+        function renderHotArticles() {
+            const hEl = document.getElementById('hotArticlesListContainer');
+            hEl.innerHTML = (appState.hotArticles || []).map((h, idx) => {
+                if (!h.id) h.id = 'ha_' + idx + '_' + (h.title || '').slice(0, 8);
+                return `
+                <div class="p-3 rounded-xl border border-slate-100 flex justify-between items-center gap-2 hover:bg-slate-50">
+                    <label class="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" ${selectedMap.hotArticles.has(h.id) ? 'checked' : ''} onchange="toggleSelectItem('hotArticles', '${h.id}', this.checked)" class="rounded text-rose-600">
+                        <div class="truncate"><span class="font-bold text-slate-800">${h.project}</span> · <a href="${h.url}" target="_blank" class="text-blue-700 underline">${h.title}</a></div>
+                    </label>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <span class="text-slate-500">週三審核：${h.wedStatus} / 週五上線：${h.friStatus}</span>
+                        <button onclick="openConfirmModal('確定要刪除嗎？', () => { appState.hotArticles = appState.hotArticles.filter(x => x.id !== '${h.id}'); selectedMap.hotArticles.delete('${h.id}'); saveState(); showToast('已刪除'); })" class="text-rose-600 hover:underline text-[11px]">刪除</button>
+                    </div>
+                </div>
+            `}).join('') || '<div class="text-center py-6 text-slate-400">尚無熱門文章搜尋紀錄</div>';
+        }
+
+        function openNewProjectModal() {
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '建立新專案';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="mProjName" type="text" placeholder="例如：2026 Q4 品牌口碑專案" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">合約總篇數</label><input id="mProjArticles" type="number" value="10" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">結案日期</label><input id="mProjDue" type="date" value="2026-12-31" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">📋 客戶需求表連結</label><input id="mProjReq" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">🗂️ 議程表連結</label><input id="mProjAgenda" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">📅 CUE表連結</label><input id="mProjCue" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">⚙️ PMS連結</label><input id="mProjPms" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="font-semibold text-slate-700">🔗 其他自訂連結（可手動新增多筆）</label>
+                            <button type="button" onclick="appendNewProjLinkRow()" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium">+ 新增一組連結</button>
+                        </div>
+                        <div id="mProjExtraLinksContainer" class="space-y-2"></div>
+                    </div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '建立專案';
+            btn.onclick = () => {
+                const name = document.getElementById('mProjName').value.trim();
+                if (!name) { showToast('請輸入專案名稱'); return; }
+                const extraLinks = [];
+                document.querySelectorAll('#mProjExtraLinksContainer .extra-link-row').forEach(row => {
+                    const label = row.querySelector('.extra-link-label').value.trim();
+                    const url = row.querySelector('.extra-link-url').value.trim();
+                    if (label || url) {
+                        extraLinks.push({ label: label || '自訂連結', url: url || '#' });
+                    }
+                });
+                const newId = 'proj_' + Date.now();
+                appState.projects.push({
+                    id: newId,
+                    name,
+                    targetArticles: Number(document.getElementById('mProjArticles').value) || 10,
+                    dueDate: document.getElementById('mProjDue').value,
+                    reqUrl: document.getElementById('mProjReq').value.trim(),
+                    agendaUrl: document.getElementById('mProjAgenda').value.trim(),
+                    cueUrl: document.getElementById('mProjCue').value.trim(),
+                    pmsUrl: document.getElementById('mProjPms').value.trim(),
+                    extraLinks,
+                    articles: []
+                });
+                appState.currentProjectId = newId;
+                saveState();
+                closeCustomModal();
+                showToast('專案建立成功');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function appendNewProjLinkRow() {
+            const container = document.getElementById('mProjExtraLinksContainer');
+            if (!container) return;
+            const row = document.createElement('div');
+            row.className = 'extra-link-row flex items-center gap-2';
+            row.innerHTML = `
+                <input type="text" placeholder="連結名稱 (例：素材雲端)" class="extra-link-label w-1/3 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                <input type="url" placeholder="https://..." class="extra-link-url flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1.5 font-bold" title="移除">✕</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function openAddProjectLinkModal() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = `新增專案連結 — ${proj.name}`;
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">連結名稱 *</label><input id="mSingleLinkLabel" type="text" placeholder="例如：素材雲端 / 報價單 / 結案報告" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">連結網址 (URL) *</label><input id="mSingleLinkUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '新增連結';
+            btn.onclick = () => {
+                const label = document.getElementById('mSingleLinkLabel').value.trim();
+                const url = document.getElementById('mSingleLinkUrl').value.trim();
+                if (!label || !url) { showToast('請輸入連結名稱與網址'); return; }
+                proj.extraLinks = proj.extraLinks || [];
+                proj.extraLinks.push({ label, url });
+                saveState();
+                closeCustomModal();
+                showToast('已新增專案連結');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function removeProjectExtraLink(idx) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj || !Array.isArray(proj.extraLinks)) return;
+            proj.extraLinks.splice(idx, 1);
+            saveState();
+            showToast('已移除連結');
+        }
+
+        function openNewArticleModal() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) { showToast('請先建立或選擇一個專案'); return; }
+            const specOpts = appState.contractSpecs.map(s => `<option value="${s.name}">${s.name} (PV:${s.pv} / 愛心:${s.likes} / 留言:${s.comments})</option>`).join('');
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '新增開文與規格設定';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">文章編號 *</label><input id="mArtCode" type="text" placeholder="ART-01" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">文體分類</label><input id="mArtCat" type="text" placeholder="開箱 / 心得 / 討論" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">對應產品規格</label>
+                        <select id="mArtSpec" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                            <option value="">-- 選擇產品規格 --</option>
+                            ${specOpts}
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">實績 PV</label><input id="mArtPv" type="number" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實績愛心</label><input id="mArtLikes" type="number" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實績留言</label><input id="mArtComments" type="number" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">上線日期</label><input id="mArtDate" type="date" value="2026-11-14" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">預估獎金 ($)</label><input id="mArtBonus" type="number" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '儲存文章';
+            btn.onclick = () => {
+                const code = document.getElementById('mArtCode').value.trim();
+                if (!code) { showToast('請輸入文章編號'); return; }
+                proj.articles = proj.articles || [];
+                proj.articles.push({
+                    id: 'art_' + Date.now(),
+                    code,
+                    category: document.getElementById('mArtCat').value,
+                    specName: document.getElementById('mArtSpec').value,
+                    pv: Number(document.getElementById('mArtPv').value) || 0,
+                    likes: Number(document.getElementById('mArtLikes').value) || 0,
+                    comments: Number(document.getElementById('mArtComments').value) || 0,
+                    publishDate: document.getElementById('mArtDate').value,
+                    bonus: Number(document.getElementById('mArtBonus').value) || 0
+                });
+                saveState();
+                closeCustomModal();
+                showToast('文章已新增');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function openWriterModal() {
+            const projListOpts = getProjectsList().map(p => `<option value="${p}">`).join('');
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '新增派案寫手（同步行事曆）';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div>
+                        <label class="block font-semibold mb-1">專案名稱 *</label>
+                        <input id="mWProj" list="wProjOptions" type="text" placeholder="選擇或輸入專案名稱" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                        <datalist id="wProjOptions">${projListOpts}</datalist>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block font-semibold mb-1">寫手 *</label>
+                            <input id="mWName" type="text" placeholder="輸入寫手名稱" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block font-semibold mb-1">月份 *</label>
+                            <input id="mWMonth" type="month" value="2026-11" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block font-semibold mb-1">企劃 / 文案 *</label>
+                            <select id="mWWorkType" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white">
+                                <option value="企劃">企劃</option>
+                                <option value="文案">文案</option>
+                                <option value="企劃+文案">企劃+文案</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-semibold mb-1">回稿日期 *</label>
+                            <input id="mWDue" type="date" value="2026-11-20" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-blue-50 text-blue-700 text-[11px] flex items-center gap-1.5">
+                        <i data-lucide="calendar-plus" class="w-3.5 h-3.5 shrink-0"></i>
+                        <span>儲存後將自動於「回稿日期」當天新增一筆「派案寫手」排程卡片至行事曆。</span>
+                    </div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '新增並同步行事曆';
+            btn.onclick = () => {
+                const project = document.getElementById('mWProj').value.trim();
+                const writer = document.getElementById('mWName').value.trim();
+                const month = document.getElementById('mWMonth').value;
+                const workType = document.getElementById('mWWorkType').value;
+                const due = document.getElementById('mWDue').value;
+
+                if (!project || !writer || !due) {
+                    showToast('請完整填寫專案名稱、寫手與回稿日期');
+                    return;
+                }
+
+                const calCardKey = 'cc_w_' + Date.now() + Math.random().toString(36).slice(2, 6);
+                const writerId = 'wr_' + Date.now();
+
+                appState.writers = appState.writers || [];
+                appState.writers.push({
+                    id: writerId,
+                    project,
+                    writer,
+                    month,
+                    workType,
+                    due,
+                    done: false,
+                    calCardKey
+                });
+
+                // 同步新增至行事曆
+                appState.calendarCards = appState.calendarCards || [];
+                appState.calendarCards.push({
+                    key: calCardKey,
+                    id: 'W' + String(Math.floor(Math.random() * 9000) + 1000),
+                    date: due,
+                    project,
+                    type: '派案寫手',
+                    task: `[${workType}] ${writer} 回稿 (${month})`,
+                    cue: '',
+                    time: '',
+                    stage: workType,
+                    note: `寫手：${writer}｜月份：${month}｜項目：${workType}｜回稿日期：${due}`,
+                    change: '由派案寫手進度追蹤同步建立',
+                    done: false
+                });
+
+                saveState();
+                closeCustomModal();
+                showToast('已新增寫手派稿並同步至行事曆！');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try { lucide.createIcons(); } catch(e) {}
+        }
+
+        function openVendorModal() {
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '新增帳號廠商發包';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">專案名稱</label><input id="mVProj" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">文案編號</label><input id="mVCode" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">訂單編號</label><input id="mVOrder" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div><label class="block font-semibold mb-1">預計上線日期</label><input id="mVDate" type="date" value="2026-11-22" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '新增發包';
+            btn.onclick = () => {
+                appState.vendors = appState.vendors || [];
+                appState.vendors.push({
+                    id: 'vd_' + Date.now(),
+                    project: document.getElementById('mVProj').value || '未指定',
+                    code: document.getElementById('mVCode').value || '-',
+                    orderId: document.getElementById('mVOrder').value || '-',
+                    date: document.getElementById('mVDate').value,
+                    confirmed: false
+                });
+                saveState();
+                closeCustomModal();
+                showToast('已新增廠商發包');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function openHotArticleModal() {
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '新增熱門文章追蹤';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">專案名稱</label><input id="mHProj" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">貼文標題 / 摘要</label><input id="mHTitle" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">貼文連結</label><input id="mHUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '加入追蹤';
+            btn.onclick = () => {
+                appState.hotArticles = appState.hotArticles || [];
+                appState.hotArticles.push({
+                    id: 'ha_' + Date.now(),
+                    project: document.getElementById('mHProj').value || '未指定',
+                    title: document.getElementById('mHTitle').value || '熱門貼文',
+                    url: document.getElementById('mHUrl').value || '#',
+                    wedStatus: '待審核',
+                    friStatus: '待上線'
+                });
+                saveState();
+                closeCustomModal();
+                showToast('已加入熱門文章追蹤');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // Firebase Authentication 已取代舊版僅存在前端的密碼鎖。
+        window.renderAll = renderAll;
+
+        window.onload = async function() {
+            if (typeof window.initCloudSync === 'function') {
+                await window.initCloudSync();
+            }
+            renderAll();
+        };
+    </script>
+</body>
+</html>
