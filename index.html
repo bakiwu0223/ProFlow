@@ -59,6 +59,20 @@
         .checkline,.selectline{display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap}
         .selectline{margin:0 0 7px;cursor:pointer;color:#596574;width:fit-content}
         .badge{border-radius:5px;background:#ffffffa6;padding:1px 5px}
+        .inline-input {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 3px 6px;
+            font-size: 12px;
+            transition: all 0.15s;
+        }
+        .inline-input:focus {
+            background: #ffffff;
+            border-color: #2563eb;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
     </style>
 </head>
 <body class="antialiased flex flex-col md:flex-row min-h-screen overflow-x-hidden">
@@ -188,7 +202,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 class="font-display text-2xl font-bold text-slate-900">ProFlow 專案執行總覽</h1>
-                        <p class="text-xs text-slate-500 mt-1">即時掌握合約達成率、每日審核待辦與團隊預估獎金</p>
+                        <p class="text-xs text-slate-500 mt-1">即時掌握合約篇數進度、彈性留言額度使用率、每日待辦與團隊預估獎金</p>
                     </div>
                     <button onclick="openNewProjectModal()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-2 w-fit">
                         <i data-lucide="folder-plus" class="w-4 h-4"></i>建立新專案
@@ -241,11 +255,11 @@
                     <div class="saas-card p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="font-display text-base font-bold text-slate-900 flex items-center gap-2">
-                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-600"></i>專案進度與達標總覽
+                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-600"></i>專案進度與達標總覽（總篇數 / 彈性留言）
                             </h2>
                             <div class="flex items-center gap-2">
                                 <button id="bulkDelProjectsBtn" onclick="bulkDeleteItems('projects')" class="hidden text-[11px] bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-lg font-medium transition">刪除已選專案 (<span id="selCount_projects">0</span>)</button>
-                                <span class="text-[11px] text-slate-400">可勾選刪除</span>
+                                <span class="text-[11px] text-slate-400">可編輯設定或勾選刪除</span>
                             </div>
                         </div>
                         <div id="dashboardProjectsOverview" class="space-y-3 text-xs text-slate-600"></div>
@@ -359,6 +373,9 @@
                         </div>
                     </div>
                     <div class="flex flex-wrap gap-2">
+                        <button onclick="openEditProjectModal()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-medium px-3.5 py-2.5 rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
+                            <i data-lucide="settings-2" class="w-4 h-4 text-blue-700"></i><span>編輯專案設定</span>
+                        </button>
                         <label class="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
                             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i><span>匯入文章清冊 (XLSX/CSV)</span>
                             <input type="file" accept=".xlsx,.xls,.csv" onchange="handleImportProjectArticlesXlsx(event)" class="hidden">
@@ -381,57 +398,77 @@
                 <!-- 專案快速連結列 -->
                 <div id="projectLinksBar" class="saas-card p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs"></div>
 
-                <!-- 專案匯總與批量套用工具列 -->
-                <div id="projectSummaryBar" class="saas-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 to-blue-50/40">
-                    <div class="flex flex-wrap items-center gap-4 text-xs">
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-slate-500">總文章數：</span>
-                            <span id="projTotalArtCount" class="font-bold text-slate-900 text-sm">0</span>
-                            <span class="text-slate-400">篇</span>
+                <!-- 專案匯總與批量套用工具列（含客戶成效規格 + 內部 KPI 標準批量套用） -->
+                <div id="projectSummaryBar" class="saas-card p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/70">
+                    <div id="projectArticlesSummaryStats" class="flex flex-wrap items-center gap-4 text-xs"></div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1.5 bg-white border border-blue-200 rounded-xl px-2.5 py-1.5">
+                            <span class="text-[11px] font-semibold text-blue-700">客戶規格：</span>
+                            <select id="bulkContractSpecSelect" class="bg-transparent text-xs text-slate-700 focus:outline-none max-w-[160px]"></select>
+                            <button onclick="applyBulkContractSpecRule()" class="bg-blue-700 hover:bg-blue-800 text-white text-[11px] font-medium px-2.5 py-1 rounded-lg transition">套用已選</button>
                         </div>
-                        <div class="h-4 w-px bg-slate-200"></div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-slate-500">客戶規格達標：</span>
-                            <span id="projSpecPassCount" class="font-bold text-blue-700 text-sm">0</span>
-                            <span class="text-slate-400">篇</span>
+                        <div class="flex items-center gap-1.5 bg-white border border-emerald-200 rounded-xl px-2.5 py-1.5">
+                            <span class="text-[11px] font-semibold text-emerald-700">內部KPI：</span>
+                            <select id="bulkKpiRuleSelect" class="bg-transparent text-xs text-slate-700 focus:outline-none max-w-[175px]"></select>
+                            <button onclick="applyBulkKpiRule()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-medium px-2.5 py-1 rounded-lg transition">套用已選</button>
                         </div>
-                        <div class="h-4 w-px bg-slate-200"></div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-slate-500">本專案預估 KPI 總獎金：</span>
-                            <span id="projBonusSumDisplay" class="font-display font-bold text-emerald-700 text-base">$0</span>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2 text-xs">
-                        <span class="text-slate-500 font-medium">批量套用 KPI 標準：</span>
-                        <select id="bulkKpiRuleSelect" class="border border-slate-300 bg-white rounded-lg px-2.5 py-1.5 text-xs max-w-[230px]"></select>
-                        <button onclick="applyBulkKpiRuleToSelected()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg font-medium transition">套用至勾選文章</button>
+                        <button onclick="recalculateAllProjectBonuses()" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-medium px-3 py-1.5 rounded-xl transition inline-flex items-center gap-1">
+                            <i data-lucide="calculator" class="w-3.5 h-3.5 text-emerald-600"></i>重算全專案獎金
+                        </button>
                     </div>
                 </div>
 
-                <!-- 文章列表與即時核對表格 -->
+                <!-- 文章明細與實績核對表格 -->
                 <div class="saas-card overflow-x-auto">
-                    <div class="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                        <span>💡 支援匯入欄位：<strong class="text-slate-700">編號、預計上線月、項目、平台、產品、內容類型、企劃</strong>。可直接點擊「編輯調整」或快速修改上線日、實績數據與對應 KPI 標準。</span>
-                        <button onclick="recalculateAllProjectArticlesBonus()" class="text-blue-700 hover:underline font-semibold inline-flex items-center gap-1 shrink-0">
-                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>重新核對全部獎金
-                        </button>
-                    </div>
-                    <table class="w-full text-left text-xs min-w-[1060px]">
-                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-500">
+                    <table class="w-full text-left text-xs min-w-[1380px]">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
                             <tr>
                                 <th class="py-3 px-3 w-9"><input type="checkbox" onchange="toggleSelectAll('articles', this.checked)" class="rounded text-blue-700"></th>
                                 <th class="py-3 px-3">編號 / 預計月</th>
-                                <th class="py-3 px-3">項目 / 平台 / 內容類型</th>
-                                <th class="py-3 px-3">產品規格 & 企劃</th>
-                                <th class="py-3 px-3">上線日期</th>
+                                <th class="py-3 px-3">項目 / 平台 / 類型</th>
+                                <th class="py-3 px-3">企劃</th>
+                                <th class="py-3 px-3 min-w-[180px]">對應客戶成效規格 (手動選)</th>
+                                <th class="py-3 px-3">上線日期 (手動)</th>
                                 <th class="py-3 px-3">實績 (PV / 愛心 / 留言)</th>
-                                <th class="py-3 px-3">客戶規格</th>
-                                <th class="py-3 px-3 min-w-[210px]">對應內部 KPI 與自動獎金</th>
+                                <th class="py-3 px-3">彈性留言使用 / 完成連結</th>
+                                <th class="py-3 px-3">客戶規格檢測</th>
+                                <th class="py-3 px-3 min-w-[185px]">內部 KPI 標準與預估獎金</th>
                                 <th class="py-3 px-3 text-right">操作</th>
                             </tr>
                         </thead>
                         <tbody id="projectArticlesTableBody" class="divide-y divide-slate-100"></tbody>
                     </table>
+                </div>
+
+                <!-- 彈性留言使用紀錄（額外配置 / 獨立使用項目） -->
+                <div class="saas-card p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="font-display text-base font-bold text-slate-900 flex items-center gap-2">
+                                    <i data-lucide="message-square-plus" class="w-4 h-4 text-purple-600"></i>彈性留言使用紀錄（獨立 / 額外配置）
+                                </h2>
+                                <span id="flexCommentQuotaSummaryBadge" class="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 rounded-full font-semibold">總計：0 / 0 則</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-1">記錄開文以外額外使用的彈性留言（系統會自動與上方文章配置的彈性留言加總，並同步顯示於 Dashboard）</p>
+                        </div>
+                        <button onclick="openFlexCommentModal()" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-medium px-3.5 py-2 rounded-xl shadow-sm transition inline-flex items-center gap-1.5 w-fit">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>新增彈性留言使用
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto border border-slate-100 rounded-xl">
+                        <table class="w-full text-left text-xs min-w-[640px]">
+                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                                <tr>
+                                    <th class="py-2.5 px-4 w-28">彈性留言則數</th>
+                                    <th class="py-2.5 px-4">使用項目 / 說明</th>
+                                    <th class="py-2.5 px-4">完成連結</th>
+                                    <th class="py-2.5 px-4 text-right w-28">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="projectFlexCommentsTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
@@ -446,6 +483,9 @@
                     <div class="flex flex-wrap gap-2">
                         <button id="bulkDelSpecsBtn" onclick="bulkDeleteItems('contractSpecs')" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>刪除已選產品 (<span id="selCount_contractSpecs">0</span>)
+                        </button>
+                        <button onclick="openNewContractSpecModal()" class="bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 shadow-2xs">
+                            <i data-lucide="plus" class="w-4 h-4"></i>手動新增產品規格
                         </button>
                         <label class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl cursor-pointer transition inline-flex items-center gap-1.5 shadow-sm">
                             <i data-lucide="upload" class="w-4 h-4"></i>匯入產品總表 (Excel/CSV)
@@ -584,7 +624,7 @@
 
     <!-- 通用確認與表單彈窗 -->
     <div id="customModalBackdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 id="customModalTitle" class="font-display text-lg font-bold text-slate-900">操作視窗</h3>
             <div id="customModalBody" class="space-y-3 text-xs text-slate-600"></div>
             <div class="flex justify-end gap-2 pt-2">
@@ -966,8 +1006,9 @@
         let appState = window.appState;
 
         let currentYear = 2026;
-        let currentMonth = 10;
+        let currentMonth = 10; // 10 = 11月
 
+        // 全域多選狀態追蹤器
         const selectedMap = {
             todos: new Set(),
             projects: new Set(),
@@ -980,15 +1021,266 @@
             hotArticles: new Set()
         };
 
+        // ==================== 工具函式 ====================
         function escapeHtml(str) {
             return String(str ?? '')
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+                .replace(/"/g, '&quot;');
         }
 
+        // 計算專案彈性留言使用加總（開文配置 + 獨立彈性留言紀錄）
+        function getProjectFlexCommentStats(proj) {
+            if (!proj) return { totalQuota: 0, articleUsed: 0, extraUsed: 0, totalUsed: 0, remaining: 0, pct: 0 };
+            const totalQuota = Number(proj.targetFlexComments || 0);
+            const articleUsed = (proj.articles || []).reduce((sum, a) => sum + (Number(a.flexCommentsUsed) || 0), 0);
+            const extraUsed = (proj.flexCommentLogs || []).reduce((sum, f) => sum + (Number(f.count) || 0), 0);
+            const totalUsed = articleUsed + extraUsed;
+            const remaining = Math.max(0, totalQuota - totalUsed);
+            const pct = totalQuota > 0 ? Math.min(100, Math.round((totalUsed / totalQuota) * 100)) : (totalUsed > 0 ? 100 : 0);
+            return { totalQuota, articleUsed, extraUsed, totalUsed, remaining, pct };
+        }
+
+        // ==================== 內部 KPI 標準下拉選單 & 獎金自動計算引擎 ====================
+        function parseChineseNumber(str) {
+            if (!str) return 0;
+            const clean = String(str).replace(/,/g, '').trim();
+            const match = clean.match(/([\d.]+)\s*(萬|千)?/);
+            if (!match) return 0;
+            let num = parseFloat(match[1]) || 0;
+            if (match[2] === '萬') num *= 10000;
+            else if (match[2] === '千') num *= 1000;
+            return num;
+        }
+
+        function parseThresholdDetails(thresholdStr) {
+            const s = String(thresholdStr || '').replace(/,/g, '');
+            const pvMatch = s.match(/([\d.]+\s*萬?)\s*(?:PV|pv|觀看)/i);
+            const likeMatch = s.match(/([\d.]+\s*萬?)\s*愛心/);
+            const commentMatch = s.match(/([\d.]+\s*萬?)\s*留言/);
+            return {
+                pv: pvMatch ? parseChineseNumber(pvMatch[1]) : parseChineseNumber(s),
+                likes: likeMatch ? parseChineseNumber(likeMatch[1]) : 0,
+                comments: commentMatch ? parseChineseNumber(commentMatch[1]) : 0
+            };
+        }
+
+        function getAvailableKpiOptions() {
+            const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
+            const options = [
+                { key: 'none', label: '不套用 / 手動輸入獎金', group: '其他', desc: '' }
+            ];
+
+            (kpi.standard || []).forEach((r, idx) => {
+                options.push({
+                    key: `standard:${idx}`,
+                    group: '🟦 一般文標準',
+                    label: `[一般文] ${r.platform} (PV≥${Number(r.views||0).toLocaleString()}, 愛心≥${r.likes||0}, 留言≥${r.comments||0} → $${r.bonus||0})`,
+                    rule: r
+                });
+            });
+
+            if (Array.isArray(kpi.matrix) && kpi.matrix.length > 0) {
+                const tiersText = kpi.matrix.map(m => `${m.tier}:${Number(m.threshold).toLocaleString()}`).join(' / ');
+                options.push({
+                    key: 'matrix:auto',
+                    group: '🟪 Threads 矩陣 (加總階梯)',
+                    label: `[Threads 矩陣] 自動對照階梯 (${tiersText})`,
+                    rules: kpi.matrix
+                });
+                kpi.matrix.forEach((r, idx) => {
+                    options.push({
+                        key: `matrix:${idx}`,
+                        group: '🟪 Threads 矩陣 (單階指定)',
+                        label: `[矩陣 ${r.tier}] 門檻 ${Number(r.threshold||0).toLocaleString()} PV → $${r.bonus||0}`,
+                        rule: r
+                    });
+                });
+            }
+
+            (kpi.special || []).forEach((r, idx) => {
+                options.push({
+                    key: `special:${idx}`,
+                    group: '🟧 Threads 特規',
+                    label: `[特規] ${r.item} (${r.threshold} → $${r.bonus||0})`,
+                    rule: r
+                });
+            });
+
+            (kpi.indexSingle || []).forEach((r, idx) => {
+                options.push({
+                    key: `indexSingle:${idx}`,
+                    group: '🟨 Threads 指標型',
+                    label: `[指標型] ${r.item} (${r.threshold} → $${r.bonus||0})`,
+                    rule: r
+                });
+            });
+
+            (kpi.diffusion || []).forEach((r, idx) => {
+                options.push({
+                    key: `diffusion:${idx}`,
+                    group: '🟩 Threads 擴散方案',
+                    label: `[擴散方案] ${r.item} (${r.threshold} → $${r.bonus||0})`,
+                    rule: r
+                });
+            });
+
+            return options;
+        }
+
+        function computeArticleBonus(article) {
+            const ruleKey = article.kpiRuleKey || 'none';
+            if (!ruleKey || ruleKey === 'none') {
+                return {
+                    bonus: Number(article.bonus || 0),
+                    matched: false,
+                    statusText: '手動設定'
+                };
+            }
+
+            const pv = Number(article.pv || 0);
+            const likes = Number(article.likes || 0);
+            const comments = Number(article.comments || 0);
+            const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
+            const [mod, idxStr] = ruleKey.split(':');
+
+            if (mod === 'standard') {
+                const r = (kpi.standard || [])[Number(idxStr)];
+                if (!r) return { bonus: 0, matched: false, statusText: '規則已移除' };
+                const pass = pv >= Number(r.views || 0) && likes >= Number(r.likes || 0) && comments >= Number(r.comments || 0);
+                return {
+                    bonus: pass ? Number(r.bonus || 0) : 0,
+                    matched: pass,
+                    statusText: pass ? `達標 (+$${r.bonus})` : `未達門檻 (${Number(r.views||0).toLocaleString()}PV/${r.likes}讚/${r.comments}留)`
+                };
+            }
+
+            if (mod === 'matrix') {
+                const tiers = kpi.matrix || [];
+                if (tiers.length === 0) return { bonus: 0, matched: false, statusText: '無矩陣規則' };
+                if (idxStr === 'auto') {
+                    let earned = 0;
+                    let highestTier = '';
+                    tiers.forEach(t => {
+                        if (pv >= Number(t.threshold || 0)) {
+                            earned += Number(t.bonus || 0);
+                            highestTier = t.tier;
+                        }
+                    });
+                    const firstCap = tiers.find(t => t.cap !== '' && t.cap != null)?.cap;
+                    if (firstCap && earned > Number(firstCap)) earned = Number(firstCap);
+                    return {
+                        bonus: earned,
+                        matched: earned > 0,
+                        statusText: earned > 0 ? `達 ${highestTier} (+$${earned})` : `未達階1 (${Number(tiers[0].threshold||0).toLocaleString()}PV)`
+                    };
+                } else {
+                    const r = tiers[Number(idxStr)];
+                    if (!r) return { bonus: 0, matched: false, statusText: '規則已移除' };
+                    const pass = pv >= Number(r.threshold || 0);
+                    return {
+                        bonus: pass ? Number(r.bonus || 0) : 0,
+                        matched: pass,
+                        statusText: pass ? `達 ${r.tier} (+$${r.bonus})` : `未達 ${Number(r.threshold||0).toLocaleString()} PV`
+                    };
+                }
+            }
+
+            if (mod === 'special' || mod === 'indexSingle' || mod === 'diffusion') {
+                const r = (kpi[mod] || [])[Number(idxStr)];
+                if (!r) return { bonus: 0, matched: false, statusText: '規則已移除' };
+                const req = parseThresholdDetails(r.threshold);
+                const passPv = req.pv > 0 ? pv >= req.pv : true;
+                const passLikes = req.likes > 0 ? likes >= req.likes : true;
+                const passComments = req.comments > 0 ? comments >= req.comments : true;
+                const pass = passPv && passLikes && passComments && (req.pv > 0 || req.likes > 0 || req.comments > 0);
+                let finalBonus = pass ? Number(r.bonus || 0) : 0;
+                if (r.cap !== '' && r.cap != null && finalBonus > Number(r.cap)) {
+                    finalBonus = Number(r.cap);
+                }
+                return {
+                    bonus: finalBonus,
+                    matched: pass,
+                    statusText: pass ? `已達標 (+$${finalBonus})` : `未達門檻 (${r.threshold})`
+                };
+            }
+
+            return { bonus: Number(article.bonus || 0), matched: false, statusText: '手動設定' };
+        }
+
+        function renderKpiRuleSelectOptions(selectedKey) {
+            const opts = getAvailableKpiOptions();
+            return opts.map(o => `<option value="${o.key}" ${o.key === selectedKey ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
+        }
+
+        // ==================== 客戶成效規格庫下拉與達標檢測 ====================
+        function renderContractSpecSelectOptions(selectedSpecIdOrName) {
+            const specs = appState.contractSpecs || [];
+            let html = `<option value="">-- 未指定客戶規格 --</option>`;
+            specs.forEach(s => {
+                const isSelected = (s.id === selectedSpecIdOrName) || (s.name === selectedSpecIdOrName && selectedSpecIdOrName !== '');
+                const label = `${s.name} (PV:${Number(s.pv||0).toLocaleString()} / 讚:${s.likes||0} / 留:${s.comments||0})`;
+                html += `<option value="${escapeHtml(s.id)}" ${isSelected ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+            });
+            return html;
+        }
+
+        function findMatchedContractSpec(article) {
+            const specs = appState.contractSpecs || [];
+            if (article.specId) {
+                const byId = specs.find(s => s.id === article.specId);
+                if (byId) return byId;
+            }
+            if (article.specName) {
+                const byName = specs.find(s => s.name === article.specName);
+                if (byName) return byName;
+            }
+            return null;
+        }
+
+        function evaluateContractSpecStatus(article) {
+            const spec = findMatchedContractSpec(article);
+            if (!spec) {
+                return {
+                    hasSpec: false,
+                    pass: false,
+                    spec: null,
+                    badgeClass: 'bg-slate-100 text-slate-500 border border-slate-200',
+                    badgeText: '— 未選客戶規格',
+                    detailText: '請於左側下拉選擇對應規格'
+                };
+            }
+
+            const reqPv = Number(spec.pv || 0);
+            const reqLikes = Number(spec.likes || 0);
+            const reqComments = Number(spec.comments || 0);
+
+            const curPv = Number(article.pv || 0);
+            const curLikes = Number(article.likes || 0);
+            const curComments = Number(article.comments || 0);
+
+            const lacks = [];
+            if (curPv < reqPv) lacks.push(`PV差 ${(reqPv - curPv).toLocaleString()}`);
+            if (curLikes < reqLikes) lacks.push(`愛心差 ${reqLikes - curLikes}`);
+            if (curComments < reqComments) lacks.push(`留言差 ${reqComments - curComments}`);
+
+            const pass = lacks.length === 0;
+            return {
+                hasSpec: true,
+                pass,
+                spec,
+                badgeClass: pass
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200',
+                badgeText: pass ? '✓ 客戶規格已達標' : '⏳ 尚未達標',
+                detailText: pass
+                    ? `目標 ${reqPv.toLocaleString()}PV / ${reqLikes}讚 / ${reqComments}留 皆已達成`
+                    : lacks.join(' · ')
+            };
+        }
+
+        // ==================== 多選與刪除控制 ====================
         function toggleSelectItem(category, id, checked) {
             if (!selectedMap[category]) selectedMap[category] = new Set();
             if (checked) selectedMap[category].add(id);
@@ -1113,7 +1405,7 @@
             if (!toast) return;
             toast.textContent = msg;
             toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2800);
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2600);
         }
 
         function closeCustomModal() {
@@ -1270,7 +1562,7 @@
                                 <span class="${t.done ? 'line-through text-slate-400' : 'text-slate-800'} truncate">${escapeHtml(t.text)}</span>
                             </label>
                         </div>
-                        <button onclick="openConfirmModal('確定要刪除此待辦事項嗎？', () => deleteTodo('${t.id}'))" class="text-slate-400 hover:text-rose-600 px-1.5 font-medium" title="刪除">✕</button>
+                        <button onclick="openConfirmModal('確定要刪除此待辦事項「${escapeHtml(t.text).replace(/'/g, "\\'")}」嗎？', () => deleteTodo('${t.id}'))" class="text-slate-400 hover:text-rose-600 px-1.5 font-medium" title="刪除">✕</button>
                     </div>
                 `).join('');
             }
@@ -1280,31 +1572,55 @@
                 projOverview.innerHTML = '<div class="py-6 text-center text-slate-400">尚無執行中專案，點擊右上角「建立新專案」開始使用</div>';
             } else {
                 projOverview.innerHTML = activeProjects.map(p => {
-                    const total = Math.max(Number(p.targetArticles || 1), (p.articles || []).length, 1);
-                    const published = (p.articles || []).filter(a => !!a.publishDate).length;
-                    const listed = (p.articles || []).length;
-                    const pct = Math.min(100, Math.round((published / total) * 100));
+                    const total = Number(p.targetArticles || 1);
+                    const done = (p.articles || []).length;
+                    const pct = Math.min(100, Math.round((done / total) * 100));
+                    const flex = getProjectFlexCommentStats(p);
+                    const isFlexOver = flex.totalQuota > 0 && flex.totalUsed > flex.totalQuota;
+
                     return `
-                        <div class="p-3 rounded-xl border border-slate-100 bg-slate-50/50 space-y-2">
+                        <div class="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-3">
                             <div class="flex justify-between items-center font-semibold text-slate-800 gap-2">
                                 <label class="flex items-center gap-2 cursor-pointer truncate">
                                     <input type="checkbox" ${selectedMap.projects.has(p.id) ? 'checked' : ''} onchange="toggleSelectItem('projects', '${p.id}', this.checked)" class="rounded text-rose-600">
-                                    <span onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="truncate hover:text-blue-700 hover:underline">${escapeHtml(p.name)}</span>
+                                    <span onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="truncate hover:text-blue-700 hover:underline text-sm">${escapeHtml(p.name)}</span>
                                 </label>
-                                <div class="flex items-center gap-2 shrink-0">
-                                    <span class="text-blue-700" title="已上線篇數 / 總篇數">已上線 ${published} / ${total} 篇 (清冊 ${listed} 篇)</span>
-                                    <button onclick="openConfirmModal('確定將專案歸檔至已結案資料嗎？', () => { toggleProjectClosedById('${p.id}', true); })" class="text-slate-500 hover:text-slate-800 text-[11px] font-normal">結案</button>
-                                    <button onclick="openConfirmModal('確定要刪除專案嗎？', () => { appState.projects = appState.projects.filter(x => x.id !== '${p.id}'); saveState(); showToast('已刪除專案'); })" class="text-rose-600 hover:underline text-[11px] font-normal">刪除</button>
+                                <div class="flex items-center gap-2 shrink-0 text-[11px] font-normal">
+                                    <button onclick="openEditProjectModal('${p.id}')" class="text-blue-700 hover:underline font-medium">編輯設定</button>
+                                    <button onclick="openConfirmModal('確定將專案「${escapeHtml(p.name).replace(/'/g, "\\'")}」歸檔至已結案資料嗎？', () => { toggleProjectClosedById('${p.id}', true); })" class="text-slate-500 hover:text-slate-800">結案</button>
+                                    <button onclick="openConfirmModal('確定要刪除專案「${escapeHtml(p.name).replace(/'/g, "\\'")}」嗎？', () => { appState.projects = appState.projects.filter(x => x.id !== '${p.id}'); saveState(); showToast('已刪除專案'); })" class="text-rose-600 hover:underline">刪除</button>
                                 </div>
                             </div>
-                            <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                                <div class="h-full bg-blue-700 rounded-full" style="width:${pct}%"></div>
+
+                            <!-- 進度條 1：合約總篇數進度 -->
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center text-[11px]">
+                                    <span class="text-slate-500 font-medium">📄 合約總篇數進度</span>
+                                    <span class="font-bold text-blue-700">${done} / ${total} 篇 (${pct}%)</span>
+                                </div>
+                                <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-blue-700 rounded-full transition-all duration-300" style="width:${pct}%"></div>
+                                </div>
+                            </div>
+
+                            <!-- 進度條 2：彈性留言使用進度（文章配置 + 手動新增） -->
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center text-[11px]">
+                                    <span class="text-slate-500 font-medium">💬 彈性留言使用 <span class="text-[10px] text-slate-400">(文章 ${flex.articleUsed} + 額外 ${flex.extraUsed})</span></span>
+                                    <span class="font-bold ${isFlexOver ? 'text-rose-600' : 'text-purple-700'}">
+                                        ${flex.totalUsed} / ${flex.totalQuota} 則 ${flex.totalQuota > 0 ? `(${flex.pct}% · 剩 ${flex.remaining} 則)` : ''}
+                                    </span>
+                                </div>
+                                <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                    <div class="h-full ${isFlexOver ? 'bg-rose-600' : 'bg-purple-600'} rounded-full transition-all duration-300" style="width:${flex.pct}%"></div>
+                                </div>
                             </div>
                         </div>
                     `;
                 }).join('');
             }
 
+            // 渲染已結案專案資料區塊
             const closedListEl = document.getElementById('dashboardClosedProjectsList');
             const closedBadgeEl = document.getElementById('closedProjectsBadge');
             if (closedBadgeEl) closedBadgeEl.textContent = `共 ${closedProjects.length} 筆已結案`;
@@ -1315,6 +1631,7 @@
                     closedListEl.innerHTML = closedProjects.map(p => {
                         const done = (p.articles || []).length;
                         const total = Number(p.targetArticles || done || 0);
+                        const flex = getProjectFlexCommentStats(p);
                         const bonusSum = (p.articles || []).reduce((acc, a) => acc + Number(a.bonus || 0), 0);
                         return `
                             <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-2.5">
@@ -1323,14 +1640,15 @@
                                         <span class="font-bold text-slate-800 truncate" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
                                         <span class="px-2 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-semibold shrink-0">已結案</span>
                                     </div>
-                                    <div class="text-[11px] text-slate-500">結案日期：${escapeHtml(p.closedDate || p.dueDate || '未記錄')} · 篇數：${done}/${total} 篇</div>
+                                    <div class="text-[11px] text-slate-500">結案日期：${p.closedDate || p.dueDate || '未記錄'}</div>
+                                    <div class="text-[11px] text-slate-600">篇數：${done}/${total} 篇 · 彈性留言：${flex.totalUsed}/${flex.totalQuota} 則</div>
                                     <div class="text-[11px] text-emerald-700 font-semibold">累計獎金：$${bonusSum.toLocaleString()}</div>
                                 </div>
                                 <div class="flex items-center justify-between pt-2 border-t border-slate-200/70 text-[11px]">
                                     <button onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="text-blue-700 hover:underline font-medium">查看規格與明細</button>
                                     <div class="flex items-center gap-2">
                                         <button onclick="toggleProjectClosedById('${p.id}', false)" class="text-slate-600 hover:text-slate-900">還原執行</button>
-                                        <button onclick="openConfirmModal('確定要永久刪除已結案專案嗎？', () => { appState.projects = appState.projects.filter(x => x.id !== '${p.id}'); saveState(); showToast('已刪除專案'); })" class="text-rose-600 hover:underline">刪除</button>
+                                        <button onclick="openConfirmModal('確定要永久刪除已結案專案「${escapeHtml(p.name).replace(/'/g, "\\'")}」嗎？', () => { appState.projects = appState.projects.filter(x => x.id !== '${p.id}'); saveState(); showToast('已刪除專案'); })" class="text-rose-600 hover:underline">刪除</button>
                                     </div>
                                 </div>
                             </div>
@@ -1433,7 +1751,7 @@
             legend.innerHTML = getProjectsList().map(p => {
                 const col = getCardColor(p);
                 const isActive = projFilter === p;
-                return `<button type="button" onclick="document.getElementById('projectFilter').value = '${projFilter === p ? '' : p}'; renderCalendar();" class="text-xs px-2.5 py-1 rounded border ${isActive ? 'ring-2 ring-blue-700' : ''}" style="border-left: 5px solid ${col}; background: color-mix(in srgb, ${col} 9%, white);">${escapeHtml(p)}</button>`;
+                return `<button type="button" onclick="document.getElementById('projectFilter').value = '${projFilter === p ? '' : escapeHtml(p)}'; renderCalendar();" class="text-xs px-2.5 py-1 rounded border ${isActive ? 'ring-2 ring-blue-700' : ''}" style="border-left: 5px solid ${col}; background: color-mix(in srgb, ${col} 9%, white);">${escapeHtml(p)}</button>`;
             }).join('');
 
             const grid = document.getElementById('calendar');
@@ -1498,7 +1816,7 @@
                         </div>
                         <div class="project">${escapeHtml(c.project)}</div>
                         <div class="task">${escapeHtml(c.task)}</div>
-                        <div class="meta">${[c.time, c.stage].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+                        <div class="meta">${escapeHtml([c.time, c.stage].filter(Boolean).join(' · '))}</div>
                         <div class="meta">${escapeHtml(c.id || '未填編號')}</div>
                         ${isList ? `<div class="listdate text-xs font-semibold text-slate-500 mt-1">${escapeHtml(c.date)}</div>` : ''}
                     </button>
@@ -1728,159 +2046,7 @@
             XLSX.writeFile(wb, 'ProFlow_卡片總表匯出.xlsx');
         }
 
-        // ==================== 內部 KPI 與 5 大模組管理 & 自動獎金計算器 ====================
-        function getAllKpiRulesOptions() {
-            const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
-            const list = [];
-            (kpi.standard || []).forEach((r, idx) => {
-                list.push({
-                    key: `standard:${idx}`,
-                    mod: 'standard',
-                    idx,
-                    label: `🟦 一般文｜${r.platform} (PV≥${Number(r.views||0).toLocaleString()}, 愛心≥${r.likes||0}, 留言≥${r.comments||0} → $${r.bonus||0})`,
-                    rule: r
-                });
-            });
-            (kpi.matrix || []).forEach((r, idx) => {
-                list.push({
-                    key: `matrix:${idx}`,
-                    mod: 'matrix',
-                    idx,
-                    label: `🟪 Threads 矩陣｜${r.tier} (PV門檻 ${Number(r.threshold||0).toLocaleString()} → $${r.bonus||0})`,
-                    rule: r
-                });
-            });
-            (kpi.special || []).forEach((r, idx) => {
-                list.push({
-                    key: `special:${idx}`,
-                    mod: 'special',
-                    idx,
-                    label: `🟧 Threads 特規｜${r.item} (${r.threshold} → $${r.bonus||0})`,
-                    rule: r
-                });
-            });
-            (kpi.indexSingle || []).forEach((r, idx) => {
-                list.push({
-                    key: `indexSingle:${idx}`,
-                    mod: 'indexSingle',
-                    idx,
-                    label: `🟨 Threads 指標型｜${r.item} (${r.threshold} → $${r.bonus||0})`,
-                    rule: r
-                });
-            });
-            (kpi.diffusion || []).forEach((r, idx) => {
-                list.push({
-                    key: `diffusion:${idx}`,
-                    mod: 'diffusion',
-                    idx,
-                    label: `🟩 Threads 擴散方案｜${r.item} (${r.threshold} → $${r.bonus||0})`,
-                    rule: r
-                });
-            });
-            return list;
-        }
-
-        function parseThresholdMetrics(text) {
-            const str = String(text || '');
-            let pv = 0, likes = 0, comments = 0;
-
-            // 解析 PV / 觀看數（支援 20萬、100萬、20,000 等格式）
-            const pvWanMatch = str.match(/(\d+(?:\.\d+)?)\s*萬\s*(?:PV|觀看)?/i);
-            if (pvWanMatch) {
-                pv = Math.round(parseFloat(pvWanMatch[1]) * 10000);
-            } else {
-                const pvNumMatch = str.match(/(\d[\d,]*)\s*(?:PV|觀看)/i);
-                if (pvNumMatch) pv = Number(pvNumMatch[1].replace(/,/g, '')) || 0;
-            }
-
-            // 解析愛心
-            const likesMatch = str.match(/(\d[\d,]*)\s*(?:愛心|讚)/i);
-            if (likesMatch) likes = Number(likesMatch[1].replace(/,/g, '')) || 0;
-
-            // 解析留言
-            const commMatch = str.match(/(\d[\d,]*)\s*留言/i);
-            if (commMatch) comments = Number(commMatch[1].replace(/,/g, '')) || 0;
-
-            return { pv, likes, comments };
-        }
-
-        function computeArticleKpiBonus(article, allProjectArticles = []) {
-            if (!article || !article.kpiRuleKey) {
-                return { bonus: Number(article?.bonus || 0), statusText: '尚未指定 KPI 標準', passed: false, hasRule: false };
-            }
-
-            const [mod, idxStr] = String(article.kpiRuleKey).split(':');
-            const idx = Number(idxStr);
-            const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
-            const rule = Array.isArray(kpi[mod]) ? kpi[mod][idx] : null;
-
-            if (!rule) {
-                return { bonus: Number(article.bonus || 0), statusText: '找不到對應規則', passed: false, hasRule: false };
-            }
-
-            const pv = Number(article.pv || 0);
-            const likes = Number(article.likes || 0);
-            const comments = Number(article.comments || 0);
-
-            if (mod === 'standard') {
-                const reqPv = Number(rule.views || 0);
-                const reqLikes = Number(rule.likes || 0);
-                const reqComments = Number(rule.comments || 0);
-                const passed = pv >= reqPv && likes >= reqLikes && comments >= reqComments;
-                return {
-                    bonus: passed ? Number(rule.bonus || 0) : 0,
-                    statusText: passed ? `✓ 已達一般文門檻 (+$${rule.bonus})` : `未達門檻 (需 PV≥${reqPv.toLocaleString()} / 愛心≥${reqLikes} / 留言≥${reqComments})`,
-                    passed,
-                    hasRule: true
-                };
-            }
-
-            if (mod === 'matrix') {
-                // 矩陣方案：支援單篇或同專案矩陣組加總門檻核對
-                const matrixArticles = allProjectArticles.filter(a => String(a.kpiRuleKey || '').startsWith('matrix:'));
-                const groupPv = matrixArticles.reduce((sum, a) => sum + Number(a.pv || 0), 0);
-                const reqPv = Number(rule.threshold || 0);
-                const passed = pv >= reqPv || groupPv >= reqPv;
-                return {
-                    bonus: passed ? Number(rule.bonus || 0) : 0,
-                    statusText: passed
-                        ? `✓ 矩陣達標 (${rule.tier} 門檻 ${reqPv.toLocaleString()}，群組總PV ${groupPv.toLocaleString()})`
-                        : `矩陣累積中 (群組總PV ${groupPv.toLocaleString()} / 門檻 ${reqPv.toLocaleString()})`,
-                    passed,
-                    hasRule: true
-                };
-            }
-
-            if (mod === 'special' || mod === 'indexSingle') {
-                const req = parseThresholdMetrics(rule.threshold);
-                const passed = pv >= req.pv && likes >= req.likes && comments >= req.comments;
-                return {
-                    bonus: passed ? Number(rule.bonus || 0) : 0,
-                    statusText: passed ? `✓ 已達「${rule.item}」門檻 (+$${rule.bonus})` : `未達門檻 (${rule.threshold})`,
-                    passed,
-                    hasRule: true
-                };
-            }
-
-            if (mod === 'diffusion') {
-                const diffArticles = allProjectArticles.filter(a => String(a.kpiRuleKey || '').startsWith('diffusion:'));
-                const groupPv = diffArticles.reduce((sum, a) => sum + Number(a.pv || 0), 0);
-                const req = parseThresholdMetrics(rule.threshold);
-                const reqPv = req.pv || 1000000;
-                const passed = pv >= reqPv || groupPv >= reqPv;
-                return {
-                    bonus: passed ? Number(rule.bonus || 0) : 0,
-                    statusText: passed
-                        ? `✓ 擴散方案達標 (群組總PV ${groupPv.toLocaleString()})`
-                        : `擴散累積中 (群組總PV ${groupPv.toLocaleString()} / 目標 ${reqPv.toLocaleString()})`,
-                    passed,
-                    hasRule: true
-                };
-            }
-
-            return { bonus: 0, statusText: '未設定', passed: false, hasRule: false };
-        }
-
+        // ==================== 內部 KPI 與 5 大模組管理 ====================
         function deleteSingleKpiRow(mod, idx) {
             const kpi = appState.internalKpis || {};
             if (Array.isArray(kpi[mod])) {
@@ -2086,7 +2252,7 @@
             showToast('已還原預設 5 大模組標準');
         }
 
-        // ==================== 專案規格與文章管理（含 XLSX 匯入、編輯、自動獎金核對） ====================
+        // ==================== 專案規格與文章管理（含 XLSX 匯入、客戶規格對應、彈性留言追蹤、自動獎金核對） ====================
         function toggleProjectClosedById(projId, toClosed) {
             const proj = appState.projects.find(p => p.id === projId);
             if (!proj) return;
@@ -2113,153 +2279,6 @@
             }
         }
 
-        function formatExcelMonthValue(raw) {
-            if (raw === null || raw === undefined || raw === '') return '';
-            if (typeof raw === 'number' && raw > 20000 && raw < 90000 && typeof XLSX !== 'undefined' && XLSX.SSF) {
-                const parsed = XLSX.SSF.parse_date_code(raw);
-                if (parsed && parsed.y && parsed.m) {
-                    return `${parsed.y}-${String(parsed.m).padStart(2, '0')}`;
-                }
-            }
-            const str = String(raw).trim();
-            const ymMatch = str.match(/^(\d{4})[\/\-](\d{1,2})/);
-            if (ymMatch) {
-                return `${ymMatch[1]}-${ymMatch[2].padStart(2, '0')}`;
-            }
-            return str;
-        }
-
-        async function handleImportProjectArticlesXlsx(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) {
-                showToast('請先建立或選擇一個專案，再匯入文章清冊');
-                e.target.value = '';
-                return;
-            }
-
-            try {
-                const buf = await file.arrayBuffer();
-                const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-                let count = 0;
-                const defaultRule = getAllKpiRulesOptions()[0]?.key || '';
-
-                wb.SheetNames.forEach(sn => {
-                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' });
-                    rows.forEach(r => {
-                        const code = String(r['編號'] || r['文章編號'] || '').trim();
-                        const item = String(r['項目'] || r['切角'] || r['主題'] || '').trim();
-                        if (!code && !item) return;
-
-                        const expectedMonth = formatExcelMonthValue(r['預計上線月'] || r['上線月'] || r['月份']);
-                        const platform = String(r['平台'] || '').trim();
-                        const product = String(r['產品'] || r['產品名稱'] || '').trim();
-                        const contentType = String(r['內容類型'] || r['文體分類'] || r['類型'] || '').trim();
-                        const planner = String(r['企劃'] || r['企劃人員'] || r['寫手'] || '').trim();
-
-                        proj.articles = proj.articles || [];
-                        proj.articles.push({
-                            id: 'art_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                            code: code || `ART-${proj.articles.length + 1}`,
-                            expectedMonth,
-                            item,
-                            platform,
-                            specName: product,
-                            category: contentType,
-                            planner,
-                            publishDate: '',
-                            pv: 0,
-                            likes: 0,
-                            comments: 0,
-                            kpiRuleKey: defaultRule,
-                            bonus: 0,
-                            manualBonus: false
-                        });
-                        count++;
-                    });
-                });
-
-                if (count > 0) {
-                    if (!proj.targetArticles || proj.targetArticles < proj.articles.length) {
-                        proj.targetArticles = proj.articles.length;
-                    }
-                    saveState();
-                    showToast(`成功匯入 ${count} 篇文章至「${proj.name}」！可隨時編輯調整`);
-                } else {
-                    showToast('未讀取到有效的文章資料，請確認表頭包含「編號、預計上線月、項目、平台、產品、內容類型、企劃」');
-                }
-            } catch (err) {
-                console.error('Import articles XLSX error:', err);
-                showToast('匯入失敗，請確認 Excel / CSV 檔案格式');
-            }
-            e.target.value = '';
-        }
-
-        function updateArticleFieldInline(artId, field, rawVal) {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
-            const art = (proj.articles || []).find(a => a.id === artId);
-            if (!art) return;
-
-            if (field === 'pv' || field === 'likes' || field === 'comments') {
-                art[field] = Math.max(0, Number(rawVal) || 0);
-            } else if (field === 'kpiRuleKey') {
-                art.kpiRuleKey = rawVal;
-                art.manualBonus = false;
-            } else {
-                art[field] = rawVal;
-            }
-
-            // 重新核對該專案所有文章獎金（支援單篇及矩陣/擴散群組加總規則）
-            recalcProjectArticlesInMemory(proj);
-            saveState();
-        }
-
-        function recalcProjectArticlesInMemory(proj) {
-            const articles = proj.articles || [];
-            articles.forEach(a => {
-                if (!a.manualBonus) {
-                    const res = computeArticleKpiBonus(a, articles);
-                    a.bonus = res.bonus;
-                }
-            });
-        }
-
-        function recalculateAllProjectArticlesBonus() {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
-            (proj.articles || []).forEach(a => { a.manualBonus = false; });
-            recalcProjectArticlesInMemory(proj);
-            saveState();
-            showToast('已依最新 KPI 標準重新核對全部文章獎金');
-        }
-
-        function applyBulkKpiRuleToSelected() {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
-            const ruleKey = document.getElementById('bulkKpiRuleSelect')?.value;
-            if (!ruleKey) {
-                showToast('請先選擇要套用的內部 KPI 標準');
-                return;
-            }
-            if (selectedMap.articles.size === 0) {
-                showToast('請先勾選左側要套用的文章');
-                return;
-            }
-            let updated = 0;
-            (proj.articles || []).forEach(a => {
-                if (selectedMap.articles.has(a.id)) {
-                    a.kpiRuleKey = ruleKey;
-                    a.manualBonus = false;
-                    updated++;
-                }
-            });
-            recalcProjectArticlesInMemory(proj);
-            saveState();
-            showToast(`已將 KPI 標準套用至 ${updated} 篇文章並重新計算獎金`);
-        }
-
         function renderProjectDetail() {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
             const titleEl = document.getElementById('detailProjectName');
@@ -2267,25 +2286,29 @@
             const toggleCloseBtn = document.getElementById('toggleCloseProjectBtn');
             const linksBar = document.getElementById('projectLinksBar');
             const tbody = document.getElementById('projectArticlesTableBody');
-            const bulkRuleSel = document.getElementById('bulkKpiRuleSelect');
+            const summaryStats = document.getElementById('projectArticlesSummaryStats');
+            const bulkKpiSel = document.getElementById('bulkKpiRuleSelect');
+            const bulkContractSel = document.getElementById('bulkContractSpecSelect');
+            const flexBody = document.getElementById('projectFlexCommentsTableBody');
+            const flexSummaryBadge = document.getElementById('flexCommentQuotaSummaryBadge');
 
-            const kpiRules = getAllKpiRulesOptions();
-            if (bulkRuleSel) {
-                const prevVal = bulkRuleSel.value;
-                bulkRuleSel.innerHTML = '<option value="">-- 選擇 KPI 獎金標準 --</option>' +
-                    kpiRules.map(r => `<option value="${escapeHtml(r.key)}">${escapeHtml(r.label)}</option>`).join('');
-                if (prevVal) bulkRuleSel.value = prevVal;
+            if (bulkKpiSel) {
+                const prevVal = bulkKpiSel.value;
+                bulkKpiSel.innerHTML = renderKpiRuleSelectOptions(prevVal || 'standard:0');
+            }
+            if (bulkContractSel) {
+                const prevSpecVal = bulkContractSel.value;
+                bulkContractSel.innerHTML = renderContractSpecSelectOptions(prevSpecVal || '');
             }
 
             if (!proj) {
                 titleEl.textContent = '專案規格與 KPI 核對（尚未選擇專案）';
                 if (statusBadge) statusBadge.classList.add('hidden');
                 if (toggleCloseBtn) toggleCloseBtn.classList.add('hidden');
+                if (summaryStats) summaryStats.innerHTML = '';
                 linksBar.innerHTML = '<div class="col-span-4 text-slate-400">請先點擊左上角「+」建立專案，再進行文章與規格核對。</div>';
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">尚無專案資料</td></tr>';
-                document.getElementById('projTotalArtCount').textContent = '0';
-                document.getElementById('projSpecPassCount').textContent = '0';
-                document.getElementById('projBonusSumDisplay').textContent = '$0';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-8 text-slate-400">尚無專案資料</td></tr>';
+                if (flexBody) flexBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">尚無專案資料</td></tr>';
                 return;
             }
 
@@ -2326,7 +2349,7 @@
                             <span>🔗 ${escapeHtml(lk.label)}</span>
                             <i data-lucide="external-link" class="w-3 h-3 text-blue-500 shrink-0"></i>
                         </a>
-                        <button onclick="openConfirmModal('確定要移除此連結嗎？', () => removeProjectExtraLink(${idx}))" class="text-slate-400 hover:text-rose-600 px-1" title="移除此連結">✕</button>
+                        <button onclick="openConfirmModal('確定要移除連結「${escapeHtml(lk.label || '').replace(/'/g, "\\'")}」嗎？', () => removeProjectExtraLink(${idx}))" class="text-slate-400 hover:text-rose-600 px-1" title="移除此連結">✕</button>
                     </div>
                 `).join('')}
                 <button onclick="openAddProjectLinkModal()" class="p-3 rounded-xl border border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/30 text-slate-500 hover:text-blue-700 flex items-center justify-center gap-1.5 font-medium transition">
@@ -2335,231 +2358,434 @@
             `;
 
             const articles = proj.articles || [];
-            let specPassCount = 0;
-            let projBonusSum = 0;
+            const flexStats = getProjectFlexCommentStats(proj);
+
+            // 統計加總
+            const totalPv = articles.reduce((s, a) => s + Number(a.pv || 0), 0);
+            const totalLikes = articles.reduce((s, a) => s + Number(a.likes || 0), 0);
+            const totalComments = articles.reduce((s, a) => s + Number(a.comments || 0), 0);
+            const projBonus = articles.reduce((s, a) => s + Number(a.bonus || 0), 0);
+            const passedContractCount = articles.filter(a => evaluateContractSpecStatus(a).pass).length;
+
+            if (summaryStats) {
+                summaryStats.innerHTML = `
+                    <div><span class="text-slate-400">篇數：</span><strong class="text-slate-900">${articles.length} / ${Number(proj.targetArticles || 0)} 篇</strong></div>
+                    <div><span class="text-slate-400">彈性留言：</span><strong class="text-purple-700">${flexStats.totalUsed} / ${flexStats.totalQuota} 則</strong></div>
+                    <div><span class="text-slate-400">客戶規格達標：</span><strong class="text-blue-700">${passedContractCount} 篇</strong></div>
+                    <div><span class="text-slate-400">實績加總：</span><strong class="text-slate-800">${totalPv.toLocaleString()} PV / ${totalLikes.toLocaleString()} 讚 / ${totalComments.toLocaleString()} 留</strong></div>
+                    <div><span class="text-slate-400">預估獎金：</span><strong class="text-emerald-700 text-sm">$${projBonus.toLocaleString()}</strong></div>
+                `;
+            }
 
             tbody.innerHTML = articles.map(a => {
-                const spec = appState.contractSpecs.find(s => s.name === a.specName);
-                const hasMetrics = Number(a.pv || 0) > 0 || Number(a.likes || 0) > 0 || Number(a.comments || 0) > 0;
-                const pass = spec
-                    ? (Number(a.pv || 0) >= Number(spec.pv || 0) && Number(a.likes || 0) >= Number(spec.likes || 0) && Number(a.comments || 0) >= Number(spec.comments || 0))
-                    : false;
-                if (pass) specPassCount++;
-
-                const kpiEval = computeArticleKpiBonus(a, articles);
-                const displayBonus = a.manualBonus ? Number(a.bonus || 0) : kpiEval.bonus;
-                projBonusSum += displayBonus;
-
-                const ruleSelectOptions = `<option value="">-- 未選擇 KPI 標準 --</option>` +
-                    kpiRules.map(r => `<option value="${escapeHtml(r.key)}" ${a.kpiRuleKey === r.key ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('');
+                const contractEval = evaluateContractSpecStatus(a);
+                const selectedSpecValue = contractEval.spec ? contractEval.spec.id : '';
+                const kpiEval = computeArticleBonus(a);
+                const currentRuleKey = a.kpiRuleKey || 'none';
+                const hasLink = a.completedUrl && a.completedUrl.trim() !== '';
 
                 return `
                     <tr class="hover:bg-slate-50/90 align-top ${selectedMap.articles.has(a.id) ? 'bg-rose-50/40' : ''}">
-                        <td class="py-3 px-3 pt-3.5">
-                            <input type="checkbox" ${selectedMap.articles.has(a.id) ? 'checked' : ''} onchange="toggleSelectItem('articles', '${a.id}', this.checked)" class="rounded text-rose-600">
+                        <td class="py-3 px-3"><input type="checkbox" ${selectedMap.articles.has(a.id) ? 'checked' : ''} onchange="toggleSelectItem('articles', '${a.id}', this.checked)" class="rounded text-rose-600 mt-1"></td>
+                        <td class="py-3 px-3">
+                            <div class="font-bold text-slate-900">${escapeHtml(a.code || '-')}</div>
+                            <div class="text-[11px] text-slate-500 mt-0.5">${a.expectedMonth ? `預計 ${escapeHtml(a.expectedMonth)}` : '未填月份'}</div>
                         </td>
-                        <td class="py-3 px-3 space-y-1">
-                            <div class="font-bold text-slate-900">${escapeHtml(a.code)}</div>
-                            ${a.expectedMonth ? `<span class="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium">預計 ${escapeHtml(a.expectedMonth)}</span>` : '<span class="text-[10px] text-slate-400">未填預計月</span>'}
-                        </td>
-                        <td class="py-3 px-3 space-y-1 max-w-[200px]">
-                            <div class="font-semibold text-slate-800 leading-snug" title="${escapeHtml(a.item || '')}">${escapeHtml(a.item || '(未填項目)')}</div>
-                            <div class="flex flex-wrap gap-1">
-                                ${a.platform ? `<span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-semibold">${escapeHtml(a.platform)}</span>` : ''}
-                                ${a.category ? `<span class="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 text-[10px] font-medium">${escapeHtml(a.category)}</span>` : ''}
+                        <td class="py-3 px-3">
+                            <div class="font-semibold text-slate-800">${escapeHtml(a.item || '-')}</div>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${a.platform ? `<span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-medium">${escapeHtml(a.platform)}</span>` : ''}
+                                ${(a.contentType || a.category) ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">${escapeHtml(a.contentType || a.category)}</span>` : ''}
                             </div>
                         </td>
-                        <td class="py-3 px-3 space-y-1">
-                            <div class="text-blue-700 font-semibold">${escapeHtml(a.specName || '未指定產品')}</div>
-                            <div class="text-[11px] text-slate-500">企劃：${escapeHtml(a.planner || '-')}</div>
+                        <td class="py-3 px-3 text-slate-700 max-w-[140px]">
+                            <div class="line-clamp-2" title="${escapeHtml(a.plan || '')}">${escapeHtml(a.plan || '-')}</div>
                         </td>
                         <td class="py-3 px-3">
-                            <input type="date" value="${escapeHtml(a.publishDate || '')}" onchange="updateArticleFieldInline('${a.id}', 'publishDate', this.value)" class="border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600">
-                        </td>
-                        <td class="py-3 px-3">
-                            <div class="flex items-center gap-1.5">
-                                <label class="flex flex-col text-[10px] text-slate-400">PV
-                                    <input type="number" min="0" value="${Number(a.pv || 0)}" onchange="updateArticleFieldInline('${a.id}', 'pv', this.value)" class="w-16 border border-slate-200 rounded px-1.5 py-1 text-xs font-mono text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600">
-                                </label>
-                                <label class="flex flex-col text-[10px] text-slate-400">愛心
-                                    <input type="number" min="0" value="${Number(a.likes || 0)}" onchange="updateArticleFieldInline('${a.id}', 'likes', this.value)" class="w-12 border border-slate-200 rounded px-1.5 py-1 text-xs font-mono text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600">
-                                </label>
-                                <label class="flex flex-col text-[10px] text-slate-400">留言
-                                    <input type="number" min="0" value="${Number(a.comments || 0)}" onchange="updateArticleFieldInline('${a.id}', 'comments', this.value)" class="w-12 border border-slate-200 rounded px-1.5 py-1 text-xs font-mono text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600">
-                                </label>
-                            </div>
-                        </td>
-                        <td class="py-3 px-3">
-                            ${!spec
-                                ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">未對應規格庫</span>'
-                                : `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold inline-block ${pass ? 'bg-emerald-50 text-emerald-700' : (hasMetrics ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500')}">
-                                    ${pass ? '✓ 規格已達成' : (hasMetrics ? '⏳ 追蹤中 / 未達' : '待填實績')}
-                                   </span>
-                                   <div class="text-[10px] text-slate-400 mt-0.5">標準：${Number(spec.pv||0).toLocaleString()} / ${spec.likes||0} / ${spec.comments||0}</div>`
-                            }
-                        </td>
-                        <td class="py-3 px-3 space-y-1.5">
-                            <select onchange="updateArticleFieldInline('${a.id}', 'kpiRuleKey', this.value)" class="w-full max-w-[220px] border border-slate-200 rounded-lg px-2 py-1 text-[11px] bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-600">
-                                ${ruleSelectOptions}
+                            <select onchange="updateArticleContractSpec('${a.id}', this.value)" class="inline-input w-full max-w-[195px] text-xs font-medium text-blue-800 bg-blue-50/40 border-blue-200">
+                                ${renderContractSpecSelectOptions(selectedSpecValue)}
                             </select>
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-[10px] ${kpiEval.passed ? 'text-emerald-700 font-semibold' : 'text-slate-400'} truncate max-w-[155px]" title="${escapeHtml(kpiEval.statusText)}">
-                                    ${escapeHtml(kpiEval.statusText)}
-                                </span>
-                                <span class="font-bold text-sm ${displayBonus > 0 ? 'text-emerald-700' : 'text-slate-400'} shrink-0">
-                                    $${displayBonus.toLocaleString()}
-                                </span>
+                            ${a.specName && !contractEval.spec ? `<div class="text-[10px] text-slate-400 mt-0.5">原匯入產品：${escapeHtml(a.specName)}</div>` : ''}
+                        </td>
+                        <td class="py-3 px-3">
+                            <input type="date" value="${escapeHtml(a.publishDate || '')}" onchange="updateArticleInline('${a.id}', 'publishDate', this.value)" class="inline-input w-[124px] text-slate-700" title="點擊修改實際上線日期">
+                        </td>
+                        <td class="py-3 px-3">
+                            <div class="flex items-center gap-1">
+                                <input type="number" min="0" value="${Number(a.pv || 0)}" onchange="updateArticleInline('${a.id}', 'pv', this.value)" class="inline-input w-[72px] font-mono text-right" placeholder="PV" title="實績 PV 數">
+                                <span class="text-slate-300">/</span>
+                                <input type="number" min="0" value="${Number(a.likes || 0)}" onchange="updateArticleInline('${a.id}', 'likes', this.value)" class="inline-input w-[50px] font-mono text-right" placeholder="讚" title="實績愛心數">
+                                <span class="text-slate-300">/</span>
+                                <input type="number" min="0" value="${Number(a.comments || 0)}" onchange="updateArticleInline('${a.id}', 'comments', this.value)" class="inline-input w-[50px] font-mono text-right" placeholder="留" title="實績留言數">
+                            </div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">PV / 愛心 / 留言</div>
+                        </td>
+                        <td class="py-3 px-3 space-y-1">
+                            <div class="flex items-center gap-1">
+                                <span class="text-[11px] text-purple-700 font-medium">💬</span>
+                                <input type="number" min="0" value="${Number(a.flexCommentsUsed || 0)}" onchange="updateArticleInline('${a.id}', 'flexCommentsUsed', this.value)" class="inline-input w-[64px] font-mono text-right text-purple-800 border-purple-200 bg-purple-50/30" title="此篇文章使用的彈性留言則數">
+                                <span class="text-[11px] text-slate-500">則</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <input type="url" value="${escapeHtml(a.completedUrl || '')}" onchange="updateArticleInline('${a.id}', 'completedUrl', this.value)" placeholder="貼上完成連結..." class="inline-input w-[128px] text-[11px] text-slate-700" title="貼上文章完成上線連結">
+                                ${hasLink ? `<a href="${escapeHtml(a.completedUrl)}" target="_blank" class="p-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 shrink-0" title="開啟完成連結"><i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
                             </div>
                         </td>
-                        <td class="py-3 px-3 text-right whitespace-nowrap space-x-2 pt-3.5">
-                            <button onclick="openEditArticleModal('${a.id}')" class="text-blue-700 hover:underline font-medium">編輯調整</button>
-                            <button onclick="openConfirmModal('確定要刪除此文章嗎？', () => deleteProjectArticle('${a.id}'))" class="text-rose-600 hover:underline">刪除</button>
+                        <td class="py-3 px-3">
+                            <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${contractEval.badgeClass}">
+                                ${contractEval.badgeText}
+                            </span>
+                            <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(contractEval.detailText)}</div>
+                        </td>
+                        <td class="py-3 px-3 space-y-1">
+                            <select onchange="updateArticleKpiRule('${a.id}', this.value)" class="inline-input w-full max-w-[195px] text-[11px] text-slate-700">
+                                ${renderKpiRuleSelectOptions(currentRuleKey)}
+                            </select>
+                            <div class="flex items-center justify-between gap-1.5">
+                                <span class="text-[10px] ${kpiEval.matched ? 'text-emerald-600 font-medium' : 'text-slate-400'} truncate max-w-[115px]" title="${escapeHtml(kpiEval.statusText)}">${escapeHtml(kpiEval.statusText)}</span>
+                                <div class="flex items-center gap-0.5 shrink-0">
+                                    <span class="text-[11px] font-bold text-emerald-700">$</span>
+                                    <input type="number" min="0" value="${Number(a.bonus || 0)}" onchange="updateArticleManualBonus('${a.id}', this.value)" class="inline-input w-[62px] font-bold text-emerald-700 text-right" title="系統依規則自動核對，亦可手動微調金額">
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-3 text-right whitespace-nowrap space-x-2">
+                            <button onclick="openEditArticleModal('${a.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
+                            <button onclick="openConfirmModal('確定要刪除文章「${escapeHtml(a.code || '').replace(/'/g, "\\'")}」嗎？', () => deleteProjectArticle('${a.id}'))" class="text-rose-600 hover:underline">刪除</button>
                         </td>
                     </tr>
                 `;
-            }).join('') || `<tr><td colspan="9" class="text-center py-10 text-slate-400">尚無文章紀錄，可點擊上方綠色按鈕「匯入文章清冊 (XLSX/CSV)」或手動「新增單篇文章」</td></tr>`;
+            }).join('') || `<tr><td colspan="11" class="text-center py-10 text-slate-400">尚無文章紀錄，請點擊右上方「匯入文章清冊 (XLSX/CSV)」或「新增單篇文章」</td></tr>`;
 
-            document.getElementById('projTotalArtCount').textContent = articles.length;
-            document.getElementById('projSpecPassCount').textContent = specPassCount;
-            document.getElementById('projBonusSumDisplay').textContent = '$' + projBonusSum.toLocaleString();
+            // 渲染獨立彈性留言使用紀錄表格
+            if (flexSummaryBadge) {
+                const isOver = flexStats.totalQuota > 0 && flexStats.totalUsed > flexStats.totalQuota;
+                flexSummaryBadge.className = `text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${isOver ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`;
+                flexSummaryBadge.textContent = `全專案合計：${flexStats.totalUsed} / ${flexStats.totalQuota} 則（文章 ${flexStats.articleUsed} 則 + 獨立紀錄 ${flexStats.extraUsed} 則 · 剩餘 ${flexStats.remaining} 則）`;
+            }
+
+            if (flexBody) {
+                const logs = proj.flexCommentLogs || [];
+                flexBody.innerHTML = logs.map((f, idx) => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-2.5 px-4 font-bold text-purple-700">${Number(f.count || 0)} 則</td>
+                        <td class="py-2.5 px-4 font-medium text-slate-800">${escapeHtml(f.item || '-')}</td>
+                        <td class="py-2.5 px-4">
+                            ${f.url ? `<a href="${escapeHtml(f.url)}" target="_blank" class="text-blue-700 hover:underline inline-flex items-center gap-1 max-w-md truncate"><span>${escapeHtml(f.url)}</span><i data-lucide="external-link" class="w-3 h-3 shrink-0"></i></a>` : '<span class="text-slate-400">未附連結</span>'}
+                        </td>
+                        <td class="py-2.5 px-4 text-right space-x-2 whitespace-nowrap">
+                            <button onclick="openFlexCommentModal(${idx})" class="text-blue-700 hover:underline font-medium">編輯</button>
+                            <button onclick="openConfirmModal('確定要刪除此筆彈性留言紀錄嗎？', () => deleteFlexCommentLog(${idx}))" class="text-rose-600 hover:underline">刪除</button>
+                        </td>
+                    </tr>
+                `).join('') || `<tr><td colspan="4" class="text-center py-6 text-slate-400">尚無額外手動新增的彈性留言使用紀錄，點擊右上方「新增彈性留言使用」即可記錄</td></tr>`;
+            }
         }
 
-        function deleteProjectArticle(artId) {
+        // 新增 / 編輯獨立彈性留言使用紀錄
+        function openFlexCommentModal(editIdx = -1) {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
-            proj.articles = (proj.articles || []).filter(a => a.id !== artId);
-            recalcProjectArticlesInMemory(proj);
-            saveState();
-            showToast('已刪除文章');
-        }
-
-        function openNewArticleModal() {
-            openEditArticleModal(null);
-        }
-
-        function openEditArticleModal(artId = null) {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) { showToast('請先建立或選擇一個專案'); return; }
-
-            const isEdit = !!artId;
-            const art = isEdit ? (proj.articles || []).find(a => a.id === artId) : null;
-            if (isEdit && !art) return;
-
-            const specListOpts = appState.contractSpecs.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)} (PV:${s.pv} / 愛心:${s.likes} / 留言:${s.comments})</option>`).join('');
-            const kpiRules = getAllKpiRulesOptions();
-            const kpiSelectOpts = `<option value="">-- 不套用 / 未選擇 --</option>` +
-                kpiRules.map(r => `<option value="${escapeHtml(r.key)}" ${(art?.kpiRuleKey || '') === r.key ? 'selected' : ''}>${escapeHtml(r.label)}</option>`).join('');
+            if (!proj) { showToast('請先選擇專案'); return; }
+            proj.flexCommentLogs = proj.flexCommentLogs || [];
+            const isEdit = editIdx >= 0 && proj.flexCommentLogs[editIdx];
+            const log = isEdit ? proj.flexCommentLogs[editIdx] : {};
 
             const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = isEdit ? `編輯調整文章 — ${art.code}` : '新增單篇文章與規格設定';
+            document.getElementById('customModalTitle').textContent = `${isEdit ? '編輯' : '新增'}彈性留言使用 — ${proj.name}`;
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">編號 *</label><input id="mArtCode" type="text" value="${escapeHtml(art?.code || '')}" placeholder="例如：01 或 ART-01" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">預計上線月</label><input id="mArtMonth" type="month" value="${escapeHtml(art?.expectedMonth || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div><label class="block font-semibold mb-1">項目 / 切角主題</label><input id="mArtItem" type="text" value="${escapeHtml(art?.item || '')}" placeholder="輸入文章項目或切角主題" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div><label class="block font-semibold mb-1">平台</label><input id="mArtPlatform" type="text" value="${escapeHtml(art?.platform || '')}" placeholder="Threads / Dcard / FB" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">內容類型</label><input id="mArtCat" type="text" value="${escapeHtml(art?.category || '')}" placeholder="開箱 / 心得 / 討論" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">企劃</label><input id="mArtPlanner" type="text" value="${escapeHtml(art?.planner || '')}" placeholder="負責企劃人員" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div>
+                        <label class="block font-semibold mb-1">彈性留言使用則數 *</label>
+                        <input id="mFlexCount" type="number" min="1" value="${log.count ?? 5}" placeholder="請輸入則數" class="w-full border border-slate-200 rounded-lg px-3 py-2">
                     </div>
                     <div>
-                        <label class="block font-semibold mb-1">產品（對應客戶成效規格庫）</label>
-                        <input id="mArtSpec" list="artSpecOptions" type="text" value="${escapeHtml(art?.specName || '')}" placeholder="選擇或輸入產品名稱" class="w-full border border-slate-200 rounded-lg px-3 py-2">
-                        <datalist id="artSpecOptions">${specListOpts}</datalist>
+                        <label class="block font-semibold mb-1">使用項目 / 說明 *</label>
+                        <input id="mFlexItem" type="text" value="${escapeHtml(log.item || '')}" placeholder="例如：熱門貼文底下導購留言 / 產品討論串回覆" class="w-full border border-slate-200 rounded-lg px-3 py-2">
                     </div>
-                    <div class="pt-2 border-t border-slate-100">
-                        <div class="text-[11px] font-bold text-slate-500 mb-2">上線與實績數據（可之後再手動修改）</div>
-                        <div class="grid grid-cols-4 gap-2">
-                            <div><label class="block font-semibold mb-1">上線日期</label><input id="mArtDate" type="date" value="${escapeHtml(art?.publishDate || '')}" class="w-full border border-slate-200 rounded-lg px-2 py-2"></div>
-                            <div><label class="block font-semibold mb-1">實績 PV</label><input id="mArtPv" type="number" min="0" value="${Number(art?.pv || 0)}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                            <div><label class="block font-semibold mb-1">愛心</label><input id="mArtLikes" type="number" min="0" value="${Number(art?.likes || 0)}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                            <div><label class="block font-semibold mb-1">留言</label><input id="mArtComments" type="number" min="0" value="${Number(art?.comments || 0)}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                        </div>
-                    </div>
-                    <div class="pt-2 border-t border-slate-100 space-y-2">
-                        <div class="text-[11px] font-bold text-emerald-700">內部 KPI 標準與獎金核對</div>
-                        <div>
-                            <label class="block font-semibold mb-1">對應內部 KPI 標準</label>
-                            <select id="mArtKpiRule" onchange="previewModalKpiBonus()" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white">
-                                ${kpiSelectOpts}
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 items-center">
-                            <div>
-                                <label class="block font-semibold mb-1">核對獎金 ($)</label>
-                                <input id="mArtBonus" type="number" min="0" value="${Number(art?.bonus || 0)}" class="w-full border border-slate-200 rounded-lg px-3 py-2 font-bold text-emerald-700">
-                            </div>
-                            <div class="pt-4">
-                                <label class="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600">
-                                    <input id="mArtManualBonus" type="checkbox" ${art?.manualBonus ? 'checked' : ''} class="rounded text-blue-700">
-                                    <span>手動鎖定此獎金金額（不隨 PV 自動覆蓋）</span>
-                                </label>
-                            </div>
-                        </div>
+                    <div>
+                        <label class="block font-semibold mb-1">完成連結 (URL)</label>
+                        <input id="mFlexUrl" type="url" value="${escapeHtml(log.url || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2">
                     </div>
                 </div>
             `;
 
             const btn = document.getElementById('customModalConfirmBtn');
-            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = isEdit ? '儲存調整' : '新增文章';
+            btn.className = 'px-4 py-2 rounded-xl bg-purple-700 text-white text-xs font-medium hover:bg-purple-800';
+            btn.textContent = isEdit ? '儲存修改' : '確認新增';
             btn.onclick = () => {
-                const code = document.getElementById('mArtCode').value.trim();
-                if (!code) { showToast('請輸入文章編號'); return; }
-
-                const updatedFields = {
-                    code,
-                    expectedMonth: document.getElementById('mArtMonth').value,
-                    item: document.getElementById('mArtItem').value.trim(),
-                    platform: document.getElementById('mArtPlatform').value.trim(),
-                    category: document.getElementById('mArtCat').value.trim(),
-                    planner: document.getElementById('mArtPlanner').value.trim(),
-                    specName: document.getElementById('mArtSpec').value.trim(),
-                    publishDate: document.getElementById('mArtDate').value,
-                    pv: Number(document.getElementById('mArtPv').value) || 0,
-                    likes: Number(document.getElementById('mArtLikes').value) || 0,
-                    comments: Number(document.getElementById('mArtComments').value) || 0,
-                    kpiRuleKey: document.getElementById('mArtKpiRule').value,
-                    bonus: Number(document.getElementById('mArtBonus').value) || 0,
-                    manualBonus: document.getElementById('mArtManualBonus').checked
-                };
-
-                proj.articles = proj.articles || [];
-                if (isEdit) {
-                    Object.assign(art, updatedFields);
-                } else {
-                    proj.articles.push({
-                        id: 'art_' + Date.now(),
-                        ...updatedFields
-                    });
+                const count = Number(document.getElementById('mFlexCount').value) || 0;
+                const item = document.getElementById('mFlexItem').value.trim();
+                const url = document.getElementById('mFlexUrl').value.trim();
+                if (count <= 0 || !item) {
+                    showToast('請輸入大於 0 的留言則數與使用項目');
+                    return;
                 }
+                const entry = {
+                    id: log.id || ('fc_' + Date.now()),
+                    count,
+                    item,
+                    url
+                };
+                if (isEdit) proj.flexCommentLogs[editIdx] = entry;
+                else proj.flexCommentLogs.push(entry);
 
-                recalcProjectArticlesInMemory(proj);
                 saveState();
                 closeCustomModal();
-                showToast(isEdit ? '文章資料已更新並完成獎金核對' : '文章已新增');
+                showToast(isEdit ? '已更新彈性留言紀錄' : '已新增彈性留言紀錄');
             };
 
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
 
-        function previewModalKpiBonus() {
+        function deleteFlexCommentLog(idx) {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            const mockArt = {
-                pv: Number(document.getElementById('mArtPv')?.value) || 0,
-                likes: Number(document.getElementById('mArtLikes')?.value) || 0,
-                comments: Number(document.getElementById('mArtComments')?.value) || 0,
-                kpiRuleKey: document.getElementById('mArtKpiRule')?.value || ''
-            };
-            const res = computeArticleKpiBonus(mockArt, proj?.articles || []);
-            const bonusInput = document.getElementById('mArtBonus');
-            const manualCheck = document.getElementById('mArtManualBonus');
-            if (bonusInput && (!manualCheck || !manualCheck.checked)) {
-                bonusInput.value = res.bonus;
+            if (!proj || !Array.isArray(proj.flexCommentLogs)) return;
+            proj.flexCommentLogs.splice(idx, 1);
+            saveState();
+            showToast('已刪除彈性留言紀錄');
+        }
+
+        // 表格內即時修改欄位（上線日期、PV、愛心、留言、彈性留言、完成連結）
+        function updateArticleInline(artId, field, value) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const art = (proj.articles || []).find(a => a.id === artId);
+            if (!art) return;
+
+            if (field === 'pv' || field === 'likes' || field === 'comments' || field === 'flexCommentsUsed') {
+                art[field] = Number(value) || 0;
+                if (art.kpiRuleKey && art.kpiRuleKey !== 'none') {
+                    const calc = computeArticleBonus(art);
+                    art.bonus = calc.bonus;
+                }
+            } else {
+                art[field] = value;
             }
+            saveState();
+        }
+
+        // 單篇文章手動選擇客戶成效規格庫
+        function updateArticleContractSpec(artId, specId) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const art = (proj.articles || []).find(a => a.id === artId);
+            if (!art) return;
+
+            const spec = (appState.contractSpecs || []).find(s => s.id === specId);
+            art.specId = spec ? spec.id : '';
+            art.specName = spec ? spec.name : '';
+            saveState();
+        }
+
+        // 批量套用客戶成效規格庫至勾選文章
+        function applyBulkContractSpecRule() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const selSpecId = document.getElementById('bulkContractSpecSelect')?.value || '';
+            const selectedIds = selectedMap.articles;
+            if (!selectedIds || selectedIds.size === 0) {
+                showToast('請先勾選左方要套用客戶規格的文章');
+                return;
+            }
+            const spec = (appState.contractSpecs || []).find(s => s.id === selSpecId);
+            let count = 0;
+            (proj.articles || []).forEach(art => {
+                if (selectedIds.has(art.id)) {
+                    art.specId = spec ? spec.id : '';
+                    art.specName = spec ? spec.name : '';
+                    count++;
+                }
+            });
+            saveState();
+            showToast(`已為 ${count} 篇文章套用客戶規格並完成檢測`);
+        }
+
+        // 切換內部 KPI 標準並自動計算獎金
+        function updateArticleKpiRule(artId, ruleKey) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const art = (proj.articles || []).find(a => a.id === artId);
+            if (!art) return;
+
+            art.kpiRuleKey = ruleKey;
+            if (ruleKey && ruleKey !== 'none') {
+                const calc = computeArticleBonus(art);
+                art.bonus = calc.bonus;
+            }
+            saveState();
+        }
+
+        // 手動微調單篇文章獎金金額
+        function updateArticleManualBonus(artId, val) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const art = (proj.articles || []).find(a => a.id === artId);
+            if (!art) return;
+
+            art.bonus = Number(val) || 0;
+            saveState();
+        }
+
+        // 批量套用內部 KPI 標準至已勾選的文章
+        function applyBulkKpiRule() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const ruleKey = document.getElementById('bulkKpiRuleSelect')?.value;
+            const selectedIds = selectedMap.articles;
+            if (!selectedIds || selectedIds.size === 0) {
+                showToast('請先勾選左方要套用 KPI 標準的文章');
+                return;
+            }
+            let updatedCount = 0;
+            (proj.articles || []).forEach(art => {
+                if (selectedIds.has(art.id)) {
+                    art.kpiRuleKey = ruleKey;
+                    if (ruleKey && ruleKey !== 'none') {
+                        art.bonus = computeArticleBonus(art).bonus;
+                    }
+                    updatedCount++;
+                }
+            });
+            saveState();
+            showToast(`已為 ${updatedCount} 篇文章套用 KPI 標準並自動核對獎金`);
+        }
+
+        // 一鍵重算當前專案所有已設定 KPI 規則的文章獎金
+        function recalculateAllProjectBonuses() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj || !proj.articles) return;
+            let count = 0;
+            proj.articles.forEach(art => {
+                if (art.kpiRuleKey && art.kpiRuleKey !== 'none') {
+                    art.bonus = computeArticleBonus(art).bonus;
+                    count++;
+                }
+            });
+            saveState();
+            showToast(`已完成 ${count} 篇文章的 KPI 獎金重新核對`);
+        }
+
+        // ==================== XLSX / CSV 匯入專案文章清冊 ====================
+        async function handleImportProjectArticlesXlsx(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) {
+                showToast('請先建立或選擇一個專案後再匯入');
+                e.target.value = '';
+                return;
+            }
+
+            try {
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+                let importedCount = 0;
+
+                wb.SheetNames.forEach(sn => {
+                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+                    if (!rows || rows.length === 0) return;
+
+                    let headerRowIdx = -1;
+                    let colMap = {};
+
+                    for (let r = 0; r < Math.min(rows.length, 15); r++) {
+                        const rowVals = rows[r].map(cell => String(cell).trim());
+                        if (rowVals.includes('編號') && (rowVals.includes('項目') || rowVals.includes('平台') || rowVals.includes('企劃'))) {
+                            headerRowIdx = r;
+                            rowVals.forEach((h, cIdx) => {
+                                if (h) colMap[h] = cIdx;
+                            });
+                            break;
+                        }
+                    }
+
+                    if (headerRowIdx === -1) {
+                        headerRowIdx = 0;
+                        colMap = {
+                            '編號': 0,
+                            '預計上線月': 1,
+                            '項目': 2,
+                            '平台': 3,
+                            '產品': 4,
+                            '內容類型': 5,
+                            '企劃': 6
+                        };
+                    }
+
+                    for (let r = headerRowIdx + 1; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || row.every(cell => String(cell).trim() === '')) continue;
+
+                        const getCell = (keys) => {
+                            for (const k of keys) {
+                                if (colMap[k] !== undefined && row[colMap[k]] !== undefined) {
+                                    return String(row[colMap[k]]).trim();
+                                }
+                            }
+                            return '';
+                        };
+
+                        const code = getCell(['編號', '文章編號', '文編']);
+                        const expectedMonth = getCell(['預計上線月', '上線月', '月份']);
+                        const item = getCell(['項目', '切角', '主題']);
+                        const platform = getCell(['平台', '通路']);
+                        const product = getCell(['產品', '產品名稱', '規格']);
+                        const contentType = getCell(['內容類型', '類型', '文體分類']);
+                        const plan = getCell(['企劃', '企劃方向', '說明']);
+
+                        if (!code && !item && !plan) continue;
+                        if (code === '編號' && item === '項目') continue;
+
+                        const matchedSpec = (appState.contractSpecs || []).find(s =>
+                            s.name === product || (product && s.name.includes(product)) || (product && product.includes(s.name))
+                        );
+
+                        proj.articles = proj.articles || [];
+                        proj.articles.push({
+                            id: 'art_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                            code: code || `ART-${proj.articles.length + 1}`,
+                            expectedMonth,
+                            item,
+                            platform,
+                            specId: matchedSpec ? matchedSpec.id : '',
+                            specName: matchedSpec ? matchedSpec.name : product,
+                            contentType,
+                            category: contentType,
+                            plan,
+                            publishDate: '',
+                            pv: 0,
+                            likes: 0,
+                            comments: 0,
+                            flexCommentsUsed: 0,
+                            completedUrl: '',
+                            kpiRuleKey: 'none',
+                            bonus: 0
+                        });
+                        importedCount++;
+                    }
+                });
+
+                if (importedCount > 0) {
+                    saveState();
+                    showToast(`成功匯入 ${importedCount} 篇文章至「${proj.name}」！`);
+                } else {
+                    showToast('未偵測到有效文章列，請確認 Excel 欄位包含：編號、預計上線月、項目、平台、產品、內容類型、企劃');
+                }
+            } catch (err) {
+                console.error('Import project articles failed:', err);
+                showToast('匯入失敗，請確認檔案是否為有效的 XLSX 或 CSV 格式');
+            }
+            e.target.value = '';
+        }
+
+        function deleteProjectArticle(artId) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            proj.articles = (proj.articles || []).filter(a => a.id !== artId);
+            selectedMap.articles.delete(artId);
+            saveState();
+            showToast('已刪除文章');
         }
 
         // ==================== 客戶成效規格庫與產品匯入 ====================
@@ -2575,9 +2801,62 @@
                     <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.pv || 0).toLocaleString()}</td>
                     <td class="py-3.5 px-4 text-slate-600">${escapeHtml(s.quote || '-')}</td>
                     <td class="py-3.5 px-4 text-slate-500 max-w-xs truncate" title="${escapeHtml(s.note || '')}">${escapeHtml(s.note || '-')}</td>
-                    <td class="py-3.5 px-4 text-right"><button onclick="openConfirmModal('確定要刪除產品嗎？', () => deleteContractSpec('${s.id}'))" class="text-rose-600 hover:underline font-medium">刪除</button></td>
+                    <td class="py-3.5 px-4 text-right space-x-2">
+                        <button onclick="openEditContractSpecModal('${s.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
+                        <button onclick="openConfirmModal('確定要刪除產品「${escapeHtml(s.name).replace(/'/g, "\\'")}」嗎？', () => deleteContractSpec('${s.id}'))" class="text-rose-600 hover:underline font-medium">刪除</button>
+                    </td>
                 </tr>
-            `).join('') || `<tr><td colspan="8" class="text-center py-10 text-slate-400">尚無客戶規格，請點選上方藍色按鈕匯入《產品總表》Excel / CSV</td></tr>`;
+            `).join('') || `<tr><td colspan="8" class="text-center py-10 text-slate-400">尚無客戶規格，請點選上方按鈕手動新增或匯入《產品總表》Excel / CSV</td></tr>`;
+        }
+
+        function openNewContractSpecModal() {
+            openEditContractSpecModal(null);
+        }
+
+        function openEditContractSpecModal(specId) {
+            const existing = specId ? (appState.contractSpecs || []).find(s => s.id === specId) : null;
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = existing ? '編輯客戶產品規格' : '手動新增客戶產品規格';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">產品名稱 *</label><input id="mSpecName" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="例如：核心主打精華液" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">必達 PV 數</label><input id="mSpecPv" type="number" min="0" value="${existing?.pv ?? 5000}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">必達愛心數</label><input id="mSpecLikes" type="number" min="0" value="${existing?.likes ?? 50}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">必達留言數</label><input id="mSpecComments" type="number" min="0" value="${existing?.comments ?? 10}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">引用</label><input id="mSpecQuote" type="text" value="${escapeHtml(existing?.quote || '-')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">備註內容</label><input id="mSpecNote" type="text" value="${escapeHtml(existing?.note || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = existing ? '儲存修改' : '確認新增';
+            btn.onclick = () => {
+                const name = document.getElementById('mSpecName').value.trim();
+                if (!name) { showToast('請輸入產品名稱'); return; }
+                const obj = {
+                    id: existing?.id || ('cs_' + Date.now() + Math.random().toString(36).slice(2, 5)),
+                    name,
+                    pv: Number(document.getElementById('mSpecPv').value) || 0,
+                    likes: Number(document.getElementById('mSpecLikes').value) || 0,
+                    comments: Number(document.getElementById('mSpecComments').value) || 0,
+                    quote: document.getElementById('mSpecQuote').value.trim() || '-',
+                    note: document.getElementById('mSpecNote').value.trim()
+                };
+                if (existing) {
+                    Object.assign(existing, obj);
+                } else {
+                    appState.contractSpecs.push(obj);
+                }
+                saveState();
+                closeCustomModal();
+                showToast(existing ? '已更新產品規格' : '已新增產品規格');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         async function handleImportProductMasterTable(e) {
@@ -2715,64 +2994,111 @@
             `}).join('') || '<div class="text-center py-6 text-slate-400">尚無熱門文章搜尋紀錄</div>';
         }
 
+        // ==================== 新增與編輯專案（含總篇數、總彈性留言、快速連結可隨時修改） ====================
         function openNewProjectModal() {
+            openProjectFormModal(null);
+        }
+
+        function openEditProjectModal(projId = null) {
+            const targetId = projId || appState.currentProjectId;
+            const proj = appState.projects.find(p => p.id === targetId);
+            if (!proj) { showToast('請先選擇專案'); return; }
+            openProjectFormModal(proj);
+        }
+
+        function openProjectFormModal(existingProj) {
+            const isEdit = !!existingProj;
             const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = '建立新專案';
+            document.getElementById('customModalTitle').textContent = isEdit ? `編輯專案設定 — ${existingProj.name}` : '建立新專案';
+
+            const extraLinks = existingProj?.extraLinks || [];
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="mProjName" type="text" placeholder="例如：2026 Q4 品牌口碑專案" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">合約總篇數</label><input id="mProjArticles" type="number" value="10" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">結案日期</label><input id="mProjDue" type="date" value="2026-12-31" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="mProjName" type="text" value="${escapeHtml(existingProj?.name || '')}" placeholder="例如：2026 Q4 品牌口碑專案" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">📄 合約總篇數</label><input id="mProjArticles" type="number" min="0" value="${existingProj?.targetArticles ?? 10}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-purple-700">💬 總彈性留言 (則)</label><input id="mProjFlexComments" type="number" min="0" value="${existingProj?.targetFlexComments ?? 0}" class="w-full border border-purple-200 bg-purple-50/30 rounded-lg px-3 py-2 font-semibold text-purple-900"></div>
+                        <div><label class="block font-semibold mb-1">結案日期</label><input id="mProjDue" type="date" value="${escapeHtml(existingProj?.dueDate || '2026-12-31')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">📋 客戶需求表連結</label><input id="mProjReq" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">🗂️ 議程表連結</label><input id="mProjAgenda" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">📋 客戶需求表連結</label><input id="mProjReq" type="url" value="${escapeHtml(existingProj?.reqUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">🗂️ 議程表連結</label><input id="mProjAgenda" type="url" value="${escapeHtml(existingProj?.agendaUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">📅 CUE表連結</label><input id="mProjCue" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">⚙️ PMS連結</label><input id="mProjPms" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">📅 CUE表連結</label><input id="mProjCue" type="url" value="${escapeHtml(existingProj?.cueUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">⚙️ PMS連結</label><input id="mProjPms" type="url" value="${escapeHtml(existingProj?.pmsUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     </div>
                     <div class="pt-2 border-t border-slate-100 space-y-2">
                         <div class="flex items-center justify-between">
                             <label class="font-semibold text-slate-700">🔗 其他自訂連結（可手動新增多筆）</label>
                             <button type="button" onclick="appendNewProjLinkRow()" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium">+ 新增一組連結</button>
                         </div>
-                        <div id="mProjExtraLinksContainer" class="space-y-2"></div>
+                        <div id="mProjExtraLinksContainer" class="space-y-2">
+                            ${extraLinks.map(lk => `
+                                <div class="extra-link-row flex items-center gap-2">
+                                    <input type="text" value="${escapeHtml(lk.label || '')}" placeholder="連結名稱" class="extra-link-label w-1/3 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                                    <input type="url" value="${escapeHtml(lk.url || '')}" placeholder="https://..." class="extra-link-url flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                                    <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1.5 font-bold" title="移除">✕</button>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 </div>
             `;
             const btn = document.getElementById('customModalConfirmBtn');
             btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = '建立專案';
+            btn.textContent = isEdit ? '儲存專案設定' : '建立專案';
             btn.onclick = () => {
                 const name = document.getElementById('mProjName').value.trim();
                 if (!name) { showToast('請輸入專案名稱'); return; }
-                const extraLinks = [];
+                const updatedExtraLinks = [];
                 document.querySelectorAll('#mProjExtraLinksContainer .extra-link-row').forEach(row => {
                     const label = row.querySelector('.extra-link-label').value.trim();
                     const url = row.querySelector('.extra-link-url').value.trim();
                     if (label || url) {
-                        extraLinks.push({ label: label || '自訂連結', url: url || '#' });
+                        updatedExtraLinks.push({ label: label || '自訂連結', url: url || '#' });
                     }
                 });
-                const newId = 'proj_' + Date.now();
-                appState.projects.push({
-                    id: newId,
-                    name,
-                    targetArticles: Number(document.getElementById('mProjArticles').value) || 10,
-                    dueDate: document.getElementById('mProjDue').value,
-                    reqUrl: document.getElementById('mProjReq').value.trim(),
-                    agendaUrl: document.getElementById('mProjAgenda').value.trim(),
-                    cueUrl: document.getElementById('mProjCue').value.trim(),
-                    pmsUrl: document.getElementById('mProjPms').value.trim(),
-                    extraLinks,
-                    articles: []
-                });
-                appState.currentProjectId = newId;
+
+                const targetArticles = Number(document.getElementById('mProjArticles').value) || 0;
+                const targetFlexComments = Number(document.getElementById('mProjFlexComments').value) || 0;
+                const dueDate = document.getElementById('mProjDue').value;
+                const reqUrl = document.getElementById('mProjReq').value.trim();
+                const agendaUrl = document.getElementById('mProjAgenda').value.trim();
+                const cueUrl = document.getElementById('mProjCue').value.trim();
+                const pmsUrl = document.getElementById('mProjPms').value.trim();
+
+                if (isEdit) {
+                    existingProj.name = name;
+                    existingProj.targetArticles = targetArticles;
+                    existingProj.targetFlexComments = targetFlexComments;
+                    existingProj.dueDate = dueDate;
+                    existingProj.reqUrl = reqUrl;
+                    existingProj.agendaUrl = agendaUrl;
+                    existingProj.cueUrl = cueUrl;
+                    existingProj.pmsUrl = pmsUrl;
+                    existingProj.extraLinks = updatedExtraLinks;
+                } else {
+                    const newId = 'proj_' + Date.now();
+                    appState.projects.push({
+                        id: newId,
+                        name,
+                        targetArticles,
+                        targetFlexComments,
+                        dueDate,
+                        reqUrl,
+                        agendaUrl,
+                        cueUrl,
+                        pmsUrl,
+                        extraLinks: updatedExtraLinks,
+                        articles: [],
+                        flexCommentLogs: []
+                    });
+                    appState.currentProjectId = newId;
+                }
                 saveState();
                 closeCustomModal();
-                showToast('專案建立成功');
+                showToast(isEdit ? '專案設定已更新' : '專案建立成功');
             };
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -2825,6 +3151,142 @@
             proj.extraLinks.splice(idx, 1);
             saveState();
             showToast('已移除連結');
+        }
+
+        // ==================== 新增 & 編輯專案文章 Modal ====================
+        function openNewArticleModal() {
+            openEditArticleModal(null);
+        }
+
+        function openEditArticleModal(artId) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) { showToast('請先建立或選擇一個專案'); return; }
+
+            const existing = artId ? (proj.articles || []).find(a => a.id === artId) : null;
+            const matchedSpec = existing ? findMatchedContractSpec(existing) : null;
+            const specOpts = renderContractSpecSelectOptions(matchedSpec ? matchedSpec.id : '');
+            const kpiOpts = renderKpiRuleSelectOptions(existing?.kpiRuleKey || 'none');
+
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = existing ? `編輯文章 — ${existing.code}` : '新增單篇文章與規格設定';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block font-semibold mb-1">文章編號 *</label><input id="mArtCode" type="text" value="${escapeHtml(existing?.code || '')}" placeholder="例如：1 或 ART-01" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">預計上線月</label><input id="mArtExpMonth" type="text" value="${escapeHtml(existing?.expectedMonth || '')}" placeholder="例如：8月" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">項目</label><input id="mArtItem" type="text" value="${escapeHtml(existing?.item || '')}" placeholder="例如：擴散、關鍵字" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">平台</label><input id="mArtPlatform" type="text" value="${escapeHtml(existing?.platform || '')}" placeholder="例如：Threads / Dcard" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">內容類型</label><input id="mArtContentType" type="text" value="${escapeHtml(existing?.contentType || existing?.category || '')}" placeholder="例如：矩陣 / 指標" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">企劃說明</label>
+                        <input id="mArtPlan" type="text" value="${escapeHtml(existing?.plan || '')}" placeholder="例如：透過話題引發自然討論" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1 text-blue-700">對應客戶成效規格庫 (必達門檻)</label>
+                        <select id="mArtSpec" class="w-full border border-blue-200 bg-blue-50/30 rounded-lg px-3 py-2">
+                            ${specOpts}
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                        <div>
+                            <label class="block font-semibold mb-1 text-purple-700">💬 彈性留言使用數量 (則)</label>
+                            <input id="mArtFlexCount" type="number" min="0" value="${existing?.flexCommentsUsed ?? 0}" class="w-full border border-purple-200 bg-purple-50/30 rounded-lg px-3 py-2 font-semibold text-purple-900">
+                        </div>
+                        <div>
+                            <label class="block font-semibold mb-1">🔗 完成連結 (URL)</label>
+                            <input id="mArtCompletedUrl" type="url" value="${escapeHtml(existing?.completedUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 pt-1 border-t border-slate-100">
+                        <div><label class="block font-semibold mb-1">實際上線日</label><input id="mArtDate" type="date" value="${escapeHtml(existing?.publishDate || '')}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實績 PV</label><input id="mArtPv" type="number" min="0" value="${existing?.pv ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實績愛心</label><input id="mArtLikes" type="number" min="0" value="${existing?.likes ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實績留言</label><input id="mArtComments" type="number" min="0" value="${existing?.comments ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
+                        <div class="col-span-2">
+                            <label class="block font-semibold mb-1">對應內部 KPI 獎金標準</label>
+                            <select id="mArtKpiRule" onchange="previewModalBonus()" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+                                ${kpiOpts}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-semibold mb-1">核對獎金 ($)</label>
+                            <input id="mArtBonus" type="number" min="0" value="${existing?.bonus ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2 font-bold text-emerald-700">
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = existing ? '儲存修改' : '儲存文章';
+            btn.onclick = () => {
+                const code = document.getElementById('mArtCode').value.trim();
+                if (!code) { showToast('請輸入文章編號'); return; }
+
+                const selectedSpecId = document.getElementById('mArtSpec').value;
+                const specObj = (appState.contractSpecs || []).find(s => s.id === selectedSpecId);
+                const kpiRuleKey = document.getElementById('mArtKpiRule').value;
+                const pv = Number(document.getElementById('mArtPv').value) || 0;
+                const likes = Number(document.getElementById('mArtLikes').value) || 0;
+                const comments = Number(document.getElementById('mArtComments').value) || 0;
+                const flexCommentsUsed = Number(document.getElementById('mArtFlexCount').value) || 0;
+                const completedUrl = document.getElementById('mArtCompletedUrl').value.trim();
+                let bonus = Number(document.getElementById('mArtBonus').value) || 0;
+
+                if (kpiRuleKey && kpiRuleKey !== 'none') {
+                    bonus = computeArticleBonus({ pv, likes, comments, kpiRuleKey, bonus }).bonus;
+                }
+
+                const updatedData = {
+                    id: existing?.id || ('art_' + Date.now()),
+                    code,
+                    expectedMonth: document.getElementById('mArtExpMonth').value.trim(),
+                    item: document.getElementById('mArtItem').value.trim(),
+                    platform: document.getElementById('mArtPlatform').value.trim(),
+                    specId: specObj ? specObj.id : '',
+                    specName: specObj ? specObj.name : '',
+                    contentType: document.getElementById('mArtContentType').value.trim(),
+                    category: document.getElementById('mArtContentType').value.trim(),
+                    plan: document.getElementById('mArtPlan').value.trim(),
+                    flexCommentsUsed,
+                    completedUrl,
+                    pv,
+                    likes,
+                    comments,
+                    publishDate: document.getElementById('mArtDate').value,
+                    kpiRuleKey,
+                    bonus
+                };
+
+                proj.articles = proj.articles || [];
+                if (existing) {
+                    Object.assign(existing, updatedData);
+                } else {
+                    proj.articles.push(updatedData);
+                }
+                saveState();
+                closeCustomModal();
+                showToast(existing ? '文章內容已更新' : '文章已新增');
+            };
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function previewModalBonus() {
+            const ruleKey = document.getElementById('mArtKpiRule')?.value || 'none';
+            if (ruleKey === 'none') return;
+            const pv = Number(document.getElementById('mArtPv')?.value) || 0;
+            const likes = Number(document.getElementById('mArtLikes')?.value) || 0;
+            const comments = Number(document.getElementById('mArtComments')?.value) || 0;
+            const res = computeArticleBonus({ pv, likes, comments, kpiRuleKey: ruleKey, bonus: 0 });
+            const bonusInput = document.getElementById('mArtBonus');
+            if (bonusInput) bonusInput.value = res.bonus;
         }
 
         function openWriterModal() {
