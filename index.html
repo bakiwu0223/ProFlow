@@ -1,27 +1,37 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProFlow | 破解流程 - 專案管理與成效核對中樞</title>
-    <!-- Tailwind CSS -->
+    <title>ProFlow — 破解流程 · 專案管理與成效核對中樞</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS for Excel/CSV -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root { --ink: #27313d; --muted: #697584; --line: #dfe5eb; --bg: #f5f7fa; --accent: #365e8d; }
-        * { box-sizing: border-box; }
-        body { font-family: 'Inter', 'Noto Sans TC', system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; margin: 0; }
-        button, input, select, textarea { font: inherit; }
+        :root {
+            --bg: #f4f6f9;
+            --card: #ffffff;
+            --line: #d9e0e7;
+            --text: #1c242b;
+            --muted: #5d6874;
+            --accent: #1f4e78;
+        }
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+        }
+        .font-display {
+            font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+        }
         .saas-card {
-            background: #ffffff;
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.02);
+            background: var(--card);
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
         }
         .nav-pill { color: #475569; border-radius: 9px; transition: all 0.15s ease; }
         .nav-pill:hover { background-color: #edf2f7; color: #0f172a; }
@@ -286,12 +296,12 @@
                 <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 class="font-display text-2xl font-bold text-slate-900">專案總覽排程月曆</h1>
-                        <p class="text-xs text-slate-500 mt-1">專案各自分色 · 卡片分類 · 完成核實 · 離線使用</p>
+                        <p class="text-xs text-slate-500 mt-1">專案各自分色 · 卡片分類 · 完成核實 · 雲端即時同步</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <label class="cursor-pointer border border-slate-300 bg-white hover:bg-slate-50 rounded-xl px-3.5 py-2 text-xs font-medium inline-flex items-center gap-1.5">
                             <i data-lucide="upload" class="w-3.5 h-3.5"></i>匯入卡片總表 (XLSX/CSV)
-                            <input type="file" accept=".xlsx,.csv" multiple onchange="handleImportCalendarCards(event)" class="hidden">
+                            <input type="file" accept=".xlsx,.csv,text/csv" multiple onchange="handleImportCalendarCards(event)" class="hidden">
                         </label>
                         <button type="button" onclick="openEditor()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
                             <i data-lucide="plus" class="w-3.5 h-3.5"></i>＋ 新增卡片
@@ -301,6 +311,9 @@
                         </button>
                     </div>
                 </header>
+
+                <!-- 匯入狀態提示列 -->
+                <div id="calImportStatus" class="hidden bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3 text-xs whitespace-pre-wrap leading-relaxed"></div>
 
                 <div class="saas-card p-6 space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
@@ -418,22 +431,20 @@
                     </div>
                 </div>
 
-                <!-- 文章明細與實績核對表格 -->
-                <div class="saas-card overflow-x-auto">
-                    <table class="w-full text-left text-xs min-w-[1380px]">
+                <!-- 文章明細與實績核對表格（免左右拉動自適應版面） -->
+                <div class="saas-card overflow-hidden">
+                    <table class="w-full text-left text-xs table-fixed">
                         <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
                             <tr>
-                                <th class="py-3 px-3 w-9"><input type="checkbox" onchange="toggleSelectAll('articles', this.checked)" class="rounded text-blue-700"></th>
-                                <th class="py-3 px-3">編號 / 預計月</th>
-                                <th class="py-3 px-3">項目 / 平台 / 類型</th>
-                                <th class="py-3 px-3">企劃</th>
-                                <th class="py-3 px-3 min-w-[180px]">對應客戶成效規格 (手動選)</th>
-                                <th class="py-3 px-3">上線日期 (手動)</th>
-                                <th class="py-3 px-3">實績 (PV / 愛心 / 留言)</th>
-                                <th class="py-3 px-3">彈性留言使用 / 完成連結</th>
-                                <th class="py-3 px-3">客戶規格檢測</th>
-                                <th class="py-3 px-3 min-w-[185px]">內部 KPI 標準與預估獎金</th>
-                                <th class="py-3 px-3 text-right">操作</th>
+                                <th class="py-3 px-2 w-8 text-center"><input type="checkbox" onchange="toggleSelectAll('articles', this.checked)" class="rounded text-blue-700"></th>
+                                <th class="py-3 px-2 w-[9%]">編號 / 月份</th>
+                                <th class="py-3 px-2 w-[14%]">項目 / 平台 / 類型</th>
+                                <th class="py-3 px-2 w-[11%]">企劃</th>
+                                <th class="py-3 px-2 w-[16%]">對應客戶成效規格 (自動/手動)</th>
+                                <th class="py-3 px-2 w-[11%]">上線日期</th>
+                                <th class="py-3 px-2 w-[12%]">實績 (PV / 讚 / 留)</th>
+                                <th class="py-3 px-2 w-[12%]">彈性留言 / 完成連結</th>
+                                <th class="py-3 px-2 w-[15%]">達標檢測 & 內部 KPI 獎金</th>
                             </tr>
                         </thead>
                         <tbody id="projectArticlesTableBody" class="divide-y divide-slate-100"></tbody>
@@ -521,7 +532,7 @@
                     <div>
                         <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold mb-1">團隊內部考核與獎金制度</div>
                         <h1 class="font-display text-2xl font-bold text-slate-900">內部 KPI 標準與獎金庫</h1>
-                        <p class="text-xs text-slate-500 mt-1">支援 5 大獎金模組手動新增、修改與刪除，對應各類文章計算規則</p>
+                        <p class="text-xs text-slate-500 mt-1">支援 5 大獎金模組手動新增、修改與刪除，並自動彙整當月全專案文章達成率</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <button id="bulkDelKpisBtn" onclick="bulkDeleteItems('internalKpis')" class="hidden bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 shadow-sm">
@@ -530,6 +541,24 @@
                         <button onclick="openConfirmModal('確定要還原預設的 5 大模組標準嗎？目前的調整將會被覆蓋。', resetInternalKpis)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-4 py-2.5 rounded-xl transition">還原預設 5 大模組標準</button>
                     </div>
                 </div>
+
+                <!-- 當月所有文章（跨專案加總）KPI 達成率統計看板 -->
+                <div id="monthlyKpiAchievementCard" class="saas-card p-6 border-emerald-200/80 bg-gradient-to-br from-emerald-50/50 via-white to-blue-50/40 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h2 class="font-display text-base font-bold text-slate-900 flex items-center gap-2">
+                                <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i>當月全專案文章 KPI 達成率統計
+                            </h2>
+                            <p class="text-[11px] text-slate-500 mt-0.5">加總所有專案該月份文章（矩陣類文章每 20 篇折算為 1 篇計算）</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="kpiStatsMonthInput" class="text-xs font-semibold text-slate-600">統計月份：</label>
+                            <input id="kpiStatsMonthInput" type="month" onchange="renderMonthlyKpiAchievement()" class="border border-slate-300 bg-white rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                        </div>
+                    </div>
+                    <div id="monthlyKpiAchievementBody"></div>
+                </div>
+
                 <div class="space-y-6" id="internalKpisContainer"></div>
             </section>
 
@@ -1005,8 +1034,9 @@
 
         let appState = window.appState;
 
-        let currentYear = 2026;
-        let currentMonth = 10; // 10 = 11月
+        const nowInit = new Date();
+        let currentYear = nowInit.getFullYear();
+        let currentMonth = nowInit.getMonth();
 
         // 全域多選狀態追蹤器
         const selectedMap = {
@@ -1021,25 +1051,29 @@
             hotArticles: new Set()
         };
 
-        // ==================== 工具函式 ====================
-        function escapeHtml(str) {
-            return String(str ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-        }
-
-        // 計算專案彈性留言使用加總（開文配置 + 獨立彈性留言紀錄）
+        // 計算專案彈性留言使用加總（只有填寫「完成連結」才算正式完成）
         function getProjectFlexCommentStats(proj) {
-            if (!proj) return { totalQuota: 0, articleUsed: 0, extraUsed: 0, totalUsed: 0, remaining: 0, pct: 0 };
+            if (!proj) return { totalQuota: 0, articleUsed: 0, extraUsed: 0, totalUsed: 0, allocatedTotal: 0, remaining: 0, pct: 0 };
             const totalQuota = Number(proj.targetFlexComments || 0);
-            const articleUsed = (proj.articles || []).reduce((sum, a) => sum + (Number(a.flexCommentsUsed) || 0), 0);
-            const extraUsed = (proj.flexCommentLogs || []).reduce((sum, f) => sum + (Number(f.count) || 0), 0);
+            const articles = proj.articles || [];
+            const logs = proj.flexCommentLogs || [];
+
+            // 只有具備完成連結才計入已完成進度
+            const articleUsed = articles
+                .filter(a => (a.completedUrl || '').trim() !== '')
+                .reduce((sum, a) => sum + (Number(a.flexCommentsUsed) || 0), 0);
+            const extraUsed = logs
+                .filter(f => (f.url || '').trim() !== '')
+                .reduce((sum, f) => sum + (Number(f.count) || 0), 0);
+
+            // 總登記則數（含尚未附上連結的規劃中則數）
+            const allocatedTotal = articles.reduce((sum, a) => sum + (Number(a.flexCommentsUsed) || 0), 0)
+                + logs.reduce((sum, f) => sum + (Number(f.count) || 0), 0);
+
             const totalUsed = articleUsed + extraUsed;
             const remaining = Math.max(0, totalQuota - totalUsed);
             const pct = totalQuota > 0 ? Math.min(100, Math.round((totalUsed / totalQuota) * 100)) : (totalUsed > 0 ? 100 : 0);
-            return { totalQuota, articleUsed, extraUsed, totalUsed, remaining, pct };
+            return { totalQuota, articleUsed, extraUsed, totalUsed, allocatedTotal, remaining, pct };
         }
 
         // ==================== 內部 KPI 標準下拉選單 & 獎金自動計算引擎 ====================
@@ -1158,31 +1192,38 @@
 
             if (mod === 'matrix') {
                 const tiers = kpi.matrix || [];
-                if (tiers.length === 0) return { bonus: 0, matched: false, statusText: '無矩陣規則' };
                 if (idxStr === 'auto') {
                     let earned = 0;
                     let highestTier = '';
+                    let cap = Infinity;
                     tiers.forEach(t => {
+                        if (t.cap !== '' && t.cap !== undefined && Number(t.cap) > 0) {
+                            cap = Math.min(cap, Number(t.cap));
+                        }
                         if (pv >= Number(t.threshold || 0)) {
-                            earned += Number(t.bonus || 0);
+                            earned += Number(t.bonus || 0) - Number(t.deduction || 0);
                             highestTier = t.tier;
                         }
                     });
-                    const firstCap = tiers.find(t => t.cap !== '' && t.cap != null)?.cap;
-                    if (firstCap && earned > Number(firstCap)) earned = Number(firstCap);
+                    if (cap !== Infinity) earned = Math.min(earned, cap);
+                    earned = Math.max(0, earned);
                     return {
                         bonus: earned,
                         matched: earned > 0,
-                        statusText: earned > 0 ? `達 ${highestTier} (+$${earned})` : `未達階1 (${Number(tiers[0].threshold||0).toLocaleString()}PV)`
+                        statusText: earned > 0 ? `達標 ${highestTier} (+$${earned})` : `未達首階 (${Number(tiers[0]?.threshold || 0).toLocaleString()} PV)`
                     };
                 } else {
                     const r = tiers[Number(idxStr)];
                     if (!r) return { bonus: 0, matched: false, statusText: '規則已移除' };
                     const pass = pv >= Number(r.threshold || 0);
+                    let earned = pass ? Math.max(0, Number(r.bonus || 0) - Number(r.deduction || 0)) : 0;
+                    if (r.cap !== '' && r.cap !== undefined && Number(r.cap) > 0) {
+                        earned = Math.min(earned, Number(r.cap));
+                    }
                     return {
-                        bonus: pass ? Number(r.bonus || 0) : 0,
+                        bonus: earned,
                         matched: pass,
-                        statusText: pass ? `達 ${r.tier} (+$${r.bonus})` : `未達 ${Number(r.threshold||0).toLocaleString()} PV`
+                        statusText: pass ? `達標 ${r.tier} (+$${earned})` : `未達 ${Number(r.threshold||0).toLocaleString()} PV`
                     };
                 }
             }
@@ -1191,18 +1232,15 @@
                 const r = (kpi[mod] || [])[Number(idxStr)];
                 if (!r) return { bonus: 0, matched: false, statusText: '規則已移除' };
                 const req = parseThresholdDetails(r.threshold);
-                const passPv = req.pv > 0 ? pv >= req.pv : true;
-                const passLikes = req.likes > 0 ? likes >= req.likes : true;
-                const passComments = req.comments > 0 ? comments >= req.comments : true;
-                const pass = passPv && passLikes && passComments && (req.pv > 0 || req.likes > 0 || req.comments > 0);
-                let finalBonus = pass ? Number(r.bonus || 0) : 0;
-                if (r.cap !== '' && r.cap != null && finalBonus > Number(r.cap)) {
-                    finalBonus = Number(r.cap);
+                const pass = pv >= req.pv && likes >= req.likes && comments >= req.comments;
+                let earned = pass ? Number(r.bonus || 0) : 0;
+                if (r.cap !== '' && r.cap !== undefined && Number(r.cap) > 0) {
+                    earned = Math.min(earned, Number(r.cap));
                 }
                 return {
-                    bonus: finalBonus,
+                    bonus: earned,
                     matched: pass,
-                    statusText: pass ? `已達標 (+$${finalBonus})` : `未達門檻 (${r.threshold})`
+                    statusText: pass ? `達標 (+$${earned})` : `未達 (${r.threshold})`
                 };
             }
 
@@ -1211,10 +1249,29 @@
 
         function renderKpiRuleSelectOptions(selectedKey) {
             const opts = getAvailableKpiOptions();
-            return opts.map(o => `<option value="${o.key}" ${o.key === selectedKey ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
+            const groups = {};
+            opts.forEach(o => {
+                if (!groups[o.group]) groups[o.group] = [];
+                groups[o.group].push(o);
+            });
+            return Object.keys(groups).map(grp => {
+                const itemsHtml = groups[grp].map(o =>
+                    `<option value="${escapeHtml(o.key)}" ${o.key === selectedKey ? 'selected' : ''}>${escapeHtml(o.label)}</option>`
+                ).join('');
+                return grp === '其他' ? itemsHtml : `<optgroup label="${escapeHtml(grp)}">${itemsHtml}</optgroup>`;
+            }).join('');
         }
 
-        // ==================== 客戶成效規格庫下拉與達標檢測 ====================
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // ==================== 客戶成效規格庫下拉與自動/手動達標檢測 ====================
         function renderContractSpecSelectOptions(selectedSpecIdOrName) {
             const specs = appState.contractSpecs || [];
             let html = `<option value="">-- 未指定客戶規格 --</option>`;
@@ -1226,8 +1283,63 @@
             return html;
         }
 
+        // 依據文章的「產品名稱 / 項目 / 平台 / 類型」自動比對最合適的客戶成效規格
+        function autoDetectContractSpecForArticle(article) {
+            const specs = appState.contractSpecs || [];
+            if (!specs.length || !article) return null;
+
+            const rawFields = [
+                article.specName,
+                article.item,
+                article.platform,
+                article.contentType,
+                article.category
+            ].map(v => String(v || '').trim().toLowerCase()).filter(Boolean);
+
+            if (!rawFields.length) return null;
+            const combinedText = rawFields.join(' ');
+
+            // 1. 優先完全比對規格名稱
+            for (const s of specs) {
+                const sName = String(s.name || '').trim().toLowerCase();
+                if (!sName) continue;
+                if (rawFields.some(f => f === sName)) return s;
+            }
+
+            // 2. 雙向包含比對（例如規格名稱為「Threads 擴散」，文章項目為「擴散」或平台為「Threads」）
+            let bestSpec = null;
+            let bestScore = 0;
+            for (const s of specs) {
+                const sName = String(s.name || '').trim().toLowerCase();
+                if (!sName) continue;
+                let score = 0;
+                rawFields.forEach(f => {
+                    if (sName.includes(f) && f.length >= 2) score += f.length * 2;
+                    if (f.includes(sName) && sName.length >= 2) score += sName.length * 3;
+                });
+                // 拆解規格名稱關鍵字比對組合（如「Threads」+「擴散」）
+                const tokens = sName.split(/[\s\/\-_、,，()（）]+/).filter(t => t.length >= 2);
+                tokens.forEach(tok => {
+                    if (combinedText.includes(tok)) score += tok.length * 2;
+                });
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestSpec = s;
+                }
+            }
+            return bestScore > 0 ? bestSpec : null;
+        }
+
         function findMatchedContractSpec(article) {
             const specs = appState.contractSpecs || [];
+            if (!article) return null;
+            // 若使用者已手動指定過（包含手動清空），優先尊重手動設定
+            if (article.specManualLock) {
+                if (article.specId) {
+                    return specs.find(s => s.id === article.specId) || null;
+                }
+                return null;
+            }
             if (article.specId) {
                 const byId = specs.find(s => s.id === article.specId);
                 if (byId) return byId;
@@ -1236,19 +1348,22 @@
                 const byName = specs.find(s => s.name === article.specName);
                 if (byName) return byName;
             }
-            return null;
+            // 自動讀取「項目 / 平台 / 類型」比對客戶規格庫
+            return autoDetectContractSpecForArticle(article);
         }
 
         function evaluateContractSpecStatus(article) {
             const spec = findMatchedContractSpec(article);
+            const isAutoMatched = !!(spec && !article.specManualLock && !article.specId);
             if (!spec) {
                 return {
                     hasSpec: false,
                     pass: false,
                     spec: null,
+                    isAutoMatched: false,
                     badgeClass: 'bg-slate-100 text-slate-500 border border-slate-200',
                     badgeText: '— 未選客戶規格',
-                    detailText: '請於左側下拉選擇對應規格'
+                    detailText: '可於左側下拉選擇對應規格'
                 };
             }
 
@@ -1270,6 +1385,7 @@
                 hasSpec: true,
                 pass,
                 spec,
+                isAutoMatched,
                 badgeClass: pass
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     : 'bg-amber-50 text-amber-700 border border-amber-200',
@@ -1375,8 +1491,70 @@
             openConfirmModal(`確定要刪除整個專案「${proj.name}」及其所有文章紀錄嗎？此動作無法復原。`, () => {
                 appState.projects = appState.projects.filter(p => p.id !== proj.id);
                 selectedMap.projects.delete(proj.id);
+                syncProjectArticlesToCalendar();
                 saveState();
                 showToast(`已刪除專案「${proj.name}」`);
+            });
+        }
+
+        // ==================== 文章上線日期與排程月曆雙向自動同步引擎 ====================
+        function syncProjectArticlesToCalendar() {
+            appState.calendarCards = appState.calendarCards || [];
+            const activeArticleCardKeys = new Set();
+
+            (appState.projects || []).forEach(proj => {
+                (proj.articles || []).forEach(art => {
+                    const pubDate = (art.publishDate || '').trim();
+                    if (!pubDate) return;
+
+                    const syncKey = `cc_art_${proj.id}_${art.id}`;
+                    activeArticleCardKeys.add(syncKey);
+
+                    const taskTitle = `[${art.code || '文章'}] ${art.item || art.platform || '文案上線'}`;
+                    const metaInfo = [art.platform, art.contentType || art.category, art.specName].filter(Boolean).join(' · ');
+                    const noteText = [
+                        art.plan ? `企劃：${art.plan}` : '',
+                        art.completedUrl ? `連結：${art.completedUrl}` : ''
+                    ].filter(Boolean).join('\n');
+
+                    const existingCard = appState.calendarCards.find(c => c.key === syncKey);
+                    if (existingCard) {
+                        existingCard.date = pubDate;
+                        existingCard.project = proj.name;
+                        existingCard.task = taskTitle;
+                        existingCard.stage = metaInfo;
+                        existingCard.note = noteText;
+                        existingCard.id = art.code || existingCard.id;
+                        existingCard.sourceProjectId = proj.id;
+                        existingCard.sourceArticleId = art.id;
+                        existingCard.done = !!(art.completedUrl && art.completedUrl.trim() !== '');
+                    } else {
+                        appState.calendarCards.push({
+                            key: syncKey,
+                            id: art.code || ('ART-' + Math.floor(Math.random() * 9000 + 1000)),
+                            date: pubDate,
+                            project: proj.name,
+                            type: '文案上線',
+                            task: taskTitle,
+                            cue: '',
+                            time: '',
+                            stage: metaInfo,
+                            note: noteText,
+                            change: '由專案文章上線日期自動同步',
+                            done: !!(art.completedUrl && art.completedUrl.trim() !== ''),
+                            sourceProjectId: proj.id,
+                            sourceArticleId: art.id
+                        });
+                    }
+                });
+            });
+
+            // 自動清理已移除上線日期、或已被刪除的文章/專案所對應的自動同步卡片
+            appState.calendarCards = appState.calendarCards.filter(c => {
+                if (c.key && c.key.startsWith('cc_art_')) {
+                    return activeArticleCardKeys.has(c.key);
+                }
+                return true;
             });
         }
 
@@ -1573,7 +1751,9 @@
             } else {
                 projOverview.innerHTML = activeProjects.map(p => {
                     const total = Number(p.targetArticles || 1);
-                    const done = (p.articles || []).length;
+                    const totalCreated = (p.articles || []).length;
+                    // 只有填寫「完成連結」的文章才計入完成篇數
+                    const done = (p.articles || []).filter(a => (a.completedUrl || '').trim() !== '').length;
                     const pct = Math.min(100, Math.round((done / total) * 100));
                     const flex = getProjectFlexCommentStats(p);
                     const isFlexOver = flex.totalQuota > 0 && flex.totalUsed > flex.totalQuota;
@@ -1592,10 +1772,10 @@
                                 </div>
                             </div>
 
-                            <!-- 進度條 1：合約總篇數進度 -->
+                            <!-- 進度條 1：合約總篇數進度（有完成連結才算完成） -->
                             <div class="space-y-1">
                                 <div class="flex justify-between items-center text-[11px]">
-                                    <span class="text-slate-500 font-medium">📄 合約總篇數進度</span>
+                                    <span class="text-slate-500 font-medium">📄 合約總篇數進度 <span class="text-[10px] text-slate-400">(有完成連結 · 已建檔 ${totalCreated} 篇)</span></span>
                                     <span class="font-bold text-blue-700">${done} / ${total} 篇 (${pct}%)</span>
                                 </div>
                                 <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -1603,10 +1783,10 @@
                                 </div>
                             </div>
 
-                            <!-- 進度條 2：彈性留言使用進度（文章配置 + 手動新增） -->
+                            <!-- 進度條 2：彈性留言使用進度（有完成連結才算完成） -->
                             <div class="space-y-1">
                                 <div class="flex justify-between items-center text-[11px]">
-                                    <span class="text-slate-500 font-medium">💬 彈性留言使用 <span class="text-[10px] text-slate-400">(文章 ${flex.articleUsed} + 額外 ${flex.extraUsed})</span></span>
+                                    <span class="text-slate-500 font-medium">💬 彈性留言完成 <span class="text-[10px] text-slate-400">(文章 ${flex.articleUsed} + 額外 ${flex.extraUsed}${flex.allocatedTotal > flex.totalUsed ? ` · 未附連結 ${flex.allocatedTotal - flex.totalUsed}` : ''})</span></span>
                                     <span class="font-bold ${isFlexOver ? 'text-rose-600' : 'text-purple-700'}">
                                         ${flex.totalUsed} / ${flex.totalQuota} 則 ${flex.totalQuota > 0 ? `(${flex.pct}% · 剩 ${flex.remaining} 則)` : ''}
                                     </span>
@@ -1751,7 +1931,7 @@
             legend.innerHTML = getProjectsList().map(p => {
                 const col = getCardColor(p);
                 const isActive = projFilter === p;
-                return `<button type="button" onclick="document.getElementById('projectFilter').value = '${projFilter === p ? '' : escapeHtml(p)}'; renderCalendar();" class="text-xs px-2.5 py-1 rounded border ${isActive ? 'ring-2 ring-blue-700' : ''}" style="border-left: 5px solid ${col}; background: color-mix(in srgb, ${col} 9%, white);">${escapeHtml(p)}</button>`;
+                return `<button type="button" onclick="document.getElementById('projectFilter').value = '${projFilter === p ? '' : escapeHtml(p).replace(/'/g, "\\'")}'; renderCalendar();" class="text-xs px-2.5 py-1 rounded border ${isActive ? 'ring-2 ring-blue-700' : ''}" style="border-left: 5px solid ${col}; background: color-mix(in srgb, ${col} 9%, white);">${escapeHtml(p)}</button>`;
             }).join('');
 
             const grid = document.getElementById('calendar');
@@ -1977,19 +2157,45 @@
             appState.calendarCards = appState.calendarCards || [];
             if (key) {
                 const idx = appState.calendarCards.findIndex(x => x.key === key);
-                if (idx >= 0) appState.calendarCards[idx] = cardData;
+                if (idx >= 0) {
+                    const prevCard = appState.calendarCards[idx];
+                    appState.calendarCards[idx] = {
+                        ...prevCard,
+                        ...cardData
+                    };
+                    // 若此卡片是從專案文章同步而來，修改月曆卡片日期時同步回寫文章上線日期
+                    if (prevCard.sourceProjectId && prevCard.sourceArticleId) {
+                        const srcProj = (appState.projects || []).find(p => p.id === prevCard.sourceProjectId);
+                        const srcArt = srcProj?.articles?.find(a => a.id === prevCard.sourceArticleId);
+                        if (srcArt) {
+                            srcArt.publishDate = date;
+                        }
+                    }
+                }
             } else {
                 appState.calendarCards.push(cardData);
             }
+            const [y, m] = date.split('-').map(Number);
+            if (y && m) {
+                currentYear = y;
+                currentMonth = m - 1;
+            }
+            syncProjectArticlesToCalendar();
             saveState();
             closeEditorModal();
-            showToast('卡片已儲存');
+            showToast('卡片已儲存並同步');
         }
 
         function deleteEditingCard() {
             const key = document.getElementById('editCardKey').value;
             if (!key) return;
             openConfirmModal('確定要刪除這張排程卡片嗎？', () => {
+                const targetCard = (appState.calendarCards || []).find(x => x.key === key);
+                if (targetCard && targetCard.sourceProjectId && targetCard.sourceArticleId) {
+                    const srcProj = (appState.projects || []).find(p => p.id === targetCard.sourceProjectId);
+                    const srcArt = srcProj?.articles?.find(a => a.id === targetCard.sourceArticleId);
+                    if (srcArt) srcArt.publishDate = '';
+                }
                 appState.calendarCards = (appState.calendarCards || []).filter(x => x.key !== key);
                 selectedMap.calendarCards.delete(key);
                 saveState();
@@ -1998,39 +2204,235 @@
             });
         }
 
-        function handleImportCalendarCards(e) {
-            const files = e.target.files;
-            if (!files || files.length === 0) return;
-            let count = 0;
-            Array.from(files).forEach(file => {
-                file.arrayBuffer().then(buf => {
-                    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-                    wb.SheetNames.forEach(sn => {
-                        XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }).forEach(r => {
-                            let rawDate = String(r['日期'] || '').trim().replaceAll('/', '-');
-                            if (rawDate) {
-                                appState.calendarCards = appState.calendarCards || [];
-                                appState.calendarCards.push({
-                                    key: 'cc_' + Date.now() + Math.random(),
-                                    id: String(r['卡片編號'] || ''),
-                                    date: rawDate.slice(0, 10),
-                                    project: String(r['專案'] || ''),
-                                    type: String(r['分類'] || ''),
-                                    task: String(r['任務'] || ''),
-                                    cue: String(r['CUE表編號'] || ''),
-                                    time: String(r['時間'] || ''),
-                                    stage: String(r['階段'] || ''),
-                                    note: String(r['說明'] || ''),
-                                    done: String(r['完成核實'] || '') === '是' || r['完成核實'] === true
-                                });
-                                count++;
+        // ==================== 強化版月曆卡片 XLSX / CSV 匯入引擎 ====================
+        function normalizeCalendarDate(val, date1904 = false) {
+            if (val === null || val === undefined || val === '') return '';
+            if (val instanceof Date && !isNaN(val.getTime())) {
+                const y = val.getFullYear();
+                const m = String(val.getMonth() + 1).padStart(2, '0');
+                const d = String(val.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            const text = String(val).trim();
+            if (!text) return '';
+
+            // 處理 Excel 日期序號 (例如 46340 或含小數點時間戳)
+            if (/^\d+(\.\d+)?$/.test(text)) {
+                const num = Number(text);
+                if (num > 0 && num < 1000000) {
+                    const base = Date.UTC(date1904 ? 1904 : 1899, date1904 ? 0 : 11, date1904 ? 1 : 30);
+                    const dt = new Date(base + Math.floor(num) * 86400000);
+                    if (!isNaN(dt.getTime())) {
+                        return dt.toISOString().slice(0, 10);
+                    }
+                }
+            }
+
+            // 處理 YYYY/M/D 或 YYYY-M-D 或 YYYY.M.D
+            const m = text.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[T\s].*)?$/);
+            if (m) {
+                const yyyy = m[1];
+                const mm = String(m[2]).padStart(2, '0');
+                const dd = String(m[3]).padStart(2, '0');
+                const test = new Date(`${yyyy}-${mm}-${dd}T12:00:00`);
+                if (!isNaN(test.getTime())) {
+                    return `${yyyy}-${mm}-${dd}`;
+                }
+            }
+
+            // 處理民國年格式 (例如 115/11/20 或 115-11-20)
+            const rocMatch = text.match(/^(1\d{2})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[T\s].*)?$/);
+            if (rocMatch) {
+                const yyyy = String(Number(rocMatch[1]) + 1911);
+                const mm = String(rocMatch[2]).padStart(2, '0');
+                const dd = String(rocMatch[3]).padStart(2, '0');
+                const test = new Date(`${yyyy}-${mm}-${dd}T12:00:00`);
+                if (!isNaN(test.getTime())) {
+                    return `${yyyy}-${mm}-${dd}`;
+                }
+            }
+
+            // 處理「11月20日」或「11/20」短日期格式（自動帶入當前檢視年份）
+            const shortMatch = text.match(/^(\d{1,2})[\/\-\.月](\d{1,2})日?$/);
+            if (shortMatch) {
+                const yyyy = String(currentYear);
+                const mm = String(shortMatch[1]).padStart(2, '0');
+                const dd = String(shortMatch[2]).padStart(2, '0');
+                const test = new Date(`${yyyy}-${mm}-${dd}T12:00:00`);
+                if (!isNaN(test.getTime())) {
+                    return `${yyyy}-${mm}-${dd}`;
+                }
+            }
+            return '';
+        }
+
+        const trimCalHeader = v => String(v ?? '').replace(/^\ufeff/, '').replace(/\s+/g, '');
+
+        function findCalHeaderRow(rows) {
+            for (let i = 0; i < Math.min(rows.length, 40); i++) {
+                const headers = (rows[i] || []).map(trimCalHeader);
+                if (
+                    headers.some(h => ['日期', '上線日期', '排程日期', '執行日期'].includes(h)) &&
+                    headers.some(h => ['專案', '專案名稱', '任務', '任務名稱', '項目', '標題', '內容'].includes(h))
+                ) {
+                    return { index: i, headers };
+                }
+            }
+            return { index: -1, headers: [] };
+        }
+
+        function getCalCell(row, headers, names) {
+            for (const name of names) {
+                const idx = headers.indexOf(name);
+                if (idx >= 0 && row[idx] !== undefined && row[idx] !== null) {
+                    return String(row[idx]).trim();
+                }
+            }
+            return '';
+        }
+
+        async function decodeCalFileBuffer(buf) {
+            const bytes = new Uint8Array(buf);
+            if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+                return new TextDecoder('utf-16le').decode(bytes);
+            }
+            if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+                return new TextDecoder('utf-16be').decode(bytes);
+            }
+            try {
+                return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            } catch {
+                return new TextDecoder('big5').decode(bytes);
+            }
+        }
+
+        async function handleImportCalendarCards(e) {
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+
+            const statusBox = document.getElementById('calImportStatus');
+            if (statusBox) {
+                statusBox.classList.remove('hidden');
+                statusBox.textContent = '正在讀取檔案，請稍候...';
+            }
+
+            let totalImported = 0;
+            let firstDate = '';
+            const logs = [];
+
+            for (const file of files) {
+                try {
+                    const buf = await file.arrayBuffer();
+                    let wb;
+                    if (/\.csv$/i.test(file.name)) {
+                        const csvText = await decodeCalFileBuffer(buf);
+                        wb = XLSX.read(csvText, { type: 'string', raw: true });
+                    } else {
+                        wb = XLSX.read(new Uint8Array(buf), { type: 'array', raw: true });
+                    }
+
+                    const date1904 = !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904);
+                    // 優先讀取「卡片總表」或「月曆保留卡片」，若沒有則掃描全部工作表避免遺漏分頁資料
+                    const preferredSheets = wb.SheetNames.filter(n => ['卡片總表', '月曆保留卡片'].includes(n));
+                    const sheetsToScan = preferredSheets.length > 0 ? preferredSheets : wb.SheetNames;
+
+                    let fileCount = 0;
+                    let skippedInvalidDate = 0;
+                    let foundHeader = false;
+
+                    for (const sn of sheetsToScan) {
+                        const sheet = wb.Sheets[sn];
+                        if (!sheet) continue;
+                        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+                        const { index: headerIdx, headers } = findCalHeaderRow(rows);
+                        if (headerIdx < 0) continue;
+
+                        foundHeader = true;
+                        for (let r = headerIdx + 1; r < rows.length; r++) {
+                            const row = rows[r];
+                            if (!row || !row.some(cell => String(cell ?? '').trim() !== '')) continue;
+
+                            const rawDate = getCalCell(row, headers, ['日期', '上線日期', '排程日期', '執行日期']);
+                            let project = getCalCell(row, headers, ['專案', '專案名稱']);
+                            let task = getCalCell(row, headers, ['任務', '任務名稱', '項目', '標題', '內容']);
+                            const id = getCalCell(row, headers, ['卡片編號', '編號']);
+                            const type = getCalCell(row, headers, ['分類', '卡片類型', '類型']) || '未分類';
+                            const note = getCalCell(row, headers, ['說明', '備註']);
+
+                            if (!rawDate && !project && !task && !id) continue;
+
+                            const date = normalizeCalendarDate(rawDate, date1904);
+                            if (!date) {
+                                if (rawDate) skippedInvalidDate++;
+                                continue;
                             }
-                        });
-                    });
-                    saveState();
-                    showToast(`成功匯入 ${count} 張排程卡片`);
-                });
-            });
+
+                            // 避免因「專案」或「任務」欄位空白而導致卡片被誤判遺失
+                            if (!project) project = (sn !== '卡片總表' && sn !== '月曆保留卡片') ? sn : '未指定專案';
+                            if (!task) task = note || id || `${type}事項`;
+
+                            const doneVal = getCalCell(row, headers, ['完成核實', '狀態', '是否完成']);
+                            const isDone = /^(true|1|是|已完成|已核實|完成|已完成核實|✓|☑)$/i.test(doneVal);
+
+                            appState.calendarCards = appState.calendarCards || [];
+                            appState.calendarCards.push({
+                                key: `cc_${Date.now()}_${r}_${Math.random().toString(36).slice(2, 8)}`,
+                                id: id || ('M' + Math.floor(Math.random() * 9000 + 1000)),
+                                date,
+                                project,
+                                type,
+                                task,
+                                cue: getCalCell(row, headers, ['CUE表編號', 'CUE']),
+                                time: getCalCell(row, headers, ['時間']),
+                                stage: getCalCell(row, headers, ['階段']),
+                                note,
+                                change: getCalCell(row, headers, ['本次異動']),
+                                done: isDone
+                            });
+
+                            if (!firstDate || date < firstDate) firstDate = date;
+                            fileCount++;
+                            totalImported++;
+                        }
+                    }
+
+                    if (!foundHeader) {
+                        logs.push(`⚠️ ${file.name}：找不到包含「日期」與「專案/任務（或項目）」的標題列`);
+                    } else if (fileCount === 0) {
+                        logs.push(`⚠️ ${file.name}：找到標題列，但沒有解析到有效日期的卡片列${skippedInvalidDate > 0 ? `（略過 ${skippedInvalidDate} 列日期格式異常）` : ''}`);
+                    } else {
+                        logs.push(`✓ ${file.name}：成功匯入 ${fileCount} 張卡片${skippedInvalidDate > 0 ? `（另有 ${skippedInvalidDate} 列因日期為空或無法辨識而略過）` : ''}`);
+                    }
+                } catch (err) {
+                    console.error('Calendar import error:', err);
+                    logs.push(`✕ ${file.name}：讀取失敗 (${err.message || '格式錯誤'})`);
+                }
+            }
+
+            if (totalImported > 0) {
+                // 自動切換到匯入卡片的首筆月份，確保立刻看得到卡片
+                if (firstDate) {
+                    const [y, m] = firstDate.split('-').map(Number);
+                    if (y && m) {
+                        currentYear = y;
+                        currentMonth = m - 1;
+                    }
+                }
+                // 清除篩選避免被舊篩選條件隱藏
+                document.getElementById('projectFilter').value = '';
+                document.getElementById('typeFilter').value = '';
+                document.getElementById('doneFilter').value = '';
+                document.getElementById('search').value = '';
+
+                saveState();
+                showToast(`成功匯入 ${totalImported} 張排程卡片！`);
+            } else {
+                showToast('未匯入任何卡片，請查看上方提示訊息');
+            }
+
+            if (statusBox) {
+                statusBox.textContent = logs.join('\n');
+            }
             e.target.value = '';
         }
 
@@ -2038,7 +2440,7 @@
             const rows = (appState.calendarCards || []).map(c => ({
                 '卡片編號': c.id, '日期': c.date, '專案': c.project, '分類': c.type,
                 '任務': c.task, 'CUE表編號': c.cue, '時間': c.time, '階段': c.stage,
-                '說明': c.note, '完成核實': c.done ? '是' : '否'
+                '說明': c.note, '本次異動': c.change || '', '完成核實': c.done ? '已核實' : ''
             }));
             const ws = XLSX.utils.json_to_sheet(rows);
             const wb = XLSX.utils.book_new();
@@ -2162,7 +2564,161 @@
             modal.classList.add('flex');
         }
 
+        // ==================== 當月全專案文章 KPI 達成率統計（矩陣 20 篇折算 1 篇） ====================
+        function isArticleInTargetMonth(art, ym) {
+            if (!ym) return true;
+            const [targetY, targetM] = ym.split('-').map(Number);
+            const pub = String(art.publishDate || '').trim();
+            if (pub && pub.startsWith(ym)) return true;
+
+            // 若尚未填寫實際上線日，則比對「預計上線月」（例如 "11月"、"2026-11"、"2026/11"）
+            if (!pub) {
+                const exp = String(art.expectedMonth || '').trim();
+                if (!exp) return false;
+                if (exp.startsWith(ym) || exp.replace('/', '-').startsWith(ym)) return true;
+                const mMatch = exp.match(/^(\d{1,2})\s*月?$/);
+                if (mMatch && Number(mMatch[1]) === targetM && targetY === new Date().getFullYear()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function isMatrixArticle(art) {
+            const ruleKey = String(art.kpiRuleKey || '');
+            if (ruleKey.startsWith('matrix:')) return true;
+            const text = [art.item, art.contentType, art.category, art.specName].join(' ');
+            return /矩陣/.test(text);
+        }
+
+        function formatEquivalentCount(num) {
+            return Number.isInteger(num) ? String(num) : num.toFixed(2).replace(/\.?0+$/, '');
+        }
+
+        function renderMonthlyKpiAchievement() {
+            const monthInput = document.getElementById('kpiStatsMonthInput');
+            const bodyEl = document.getElementById('monthlyKpiAchievementBody');
+            if (!monthInput || !bodyEl) return;
+
+            if (!monthInput.value) {
+                const now = new Date();
+                monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            }
+            const ym = monthInput.value;
+
+            let normalTotalRaw = 0;
+            let normalPassedRaw = 0;
+            let matrixTotalRaw = 0;
+            let matrixPassedRaw = 0;
+            let totalMonthBonus = 0;
+            const projectBreakdown = [];
+
+            (appState.projects || []).forEach(proj => {
+                const matchedArts = (proj.articles || []).filter(a => isArticleInTargetMonth(a, ym));
+                if (matchedArts.length === 0) return;
+
+                let pNormalTotal = 0;
+                let pNormalPass = 0;
+                let pMatrixTotal = 0;
+                let pMatrixPass = 0;
+                let pBonus = 0;
+
+                matchedArts.forEach(art => {
+                    const evalRes = computeArticleBonus(art);
+                    const isPassed = evalRes.matched || Number(art.bonus || 0) > 0;
+                    pBonus += Number(art.bonus || 0);
+
+                    if (isMatrixArticle(art)) {
+                        pMatrixTotal += 1;
+                        if (isPassed) pMatrixPass += 1;
+                    } else {
+                        pNormalTotal += 1;
+                        if (isPassed) pNormalPass += 1;
+                    }
+                });
+
+                normalTotalRaw += pNormalTotal;
+                normalPassedRaw += pNormalPass;
+                matrixTotalRaw += pMatrixTotal;
+                matrixPassedRaw += pMatrixPass;
+                totalMonthBonus += pBonus;
+
+                const pEqTotal = pNormalTotal + (pMatrixTotal / 20);
+                const pEqPass = pNormalPass + (pMatrixPass / 20);
+                const pRate = pEqTotal > 0 ? Math.round((pEqPass / pEqTotal) * 1000) / 10 : 0;
+
+                projectBreakdown.push({
+                    name: proj.name,
+                    rawTotal: matchedArts.length,
+                    pNormalTotal,
+                    pNormalPass,
+                    pMatrixTotal,
+                    pMatrixPass,
+                    pEqTotal,
+                    pEqPass,
+                    pRate,
+                    pBonus
+                });
+            });
+
+            // 矩陣每 20 篇只算 1 篇
+            const matrixEqTotal = matrixTotalRaw / 20;
+            const matrixEqPassed = matrixPassedRaw / 20;
+            const eqTotalArticles = normalTotalRaw + matrixEqTotal;
+            const eqPassedArticles = normalPassedRaw + matrixEqPassed;
+            const achievementRate = eqTotalArticles > 0
+                ? Math.min(100, Math.round((eqPassedArticles / eqTotalArticles) * 1000) / 10)
+                : 0;
+
+            bodyEl.innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div class="bg-white rounded-xl border border-emerald-200 p-4 shadow-2xs">
+                        <div class="text-[11px] font-semibold text-emerald-700">🎯 當月 KPI 總達成率</div>
+                        <div class="font-display text-2xl font-extrabold text-emerald-700 mt-1">${achievementRate}%</div>
+                        <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-2">
+                            <div class="h-full bg-emerald-600 rounded-full transition-all duration-300" style="width:${achievementRate}%"></div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-1.5">換算達成 <strong>${formatEquivalentCount(eqPassedArticles)}</strong> / <strong>${formatEquivalentCount(eqTotalArticles)}</strong> 篇</div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <div class="text-[11px] font-medium text-slate-500">📄 換算總篇數（矩陣 20 算 1）</div>
+                        <div class="font-display text-2xl font-bold text-slate-900 mt-1">${formatEquivalentCount(eqTotalArticles)} <span class="text-xs font-normal text-slate-400">篇</span></div>
+                        <div class="text-[11px] text-slate-500 mt-2">一般 ${normalTotalRaw} 篇 + 矩陣 ${matrixTotalRaw} 篇 (折算 ${formatEquivalentCount(matrixEqTotal)} 篇)</div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <div class="text-[11px] font-medium text-slate-500">✅ 換算已達標篇數</div>
+                        <div class="font-display text-2xl font-bold text-blue-700 mt-1">${formatEquivalentCount(eqPassedArticles)} <span class="text-xs font-normal text-slate-400">篇</span></div>
+                        <div class="text-[11px] text-slate-500 mt-2">一般達標 ${normalPassedRaw} 篇 + 矩陣達標 ${matrixPassedRaw} 篇 (折算 ${formatEquivalentCount(matrixEqPassed)} 篇)</div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200 p-4">
+                        <div class="text-[11px] font-medium text-slate-500">💰 當月全專案預估獎金</div>
+                        <div class="font-display text-2xl font-bold text-amber-600 mt-1">$${totalMonthBonus.toLocaleString()}</div>
+                        <div class="text-[11px] text-slate-500 mt-2">涵蓋 ${projectBreakdown.length} 個執行專案</div>
+                    </div>
+                </div>
+
+                ${projectBreakdown.length > 0 ? `
+                    <div class="mt-3 pt-3 border-t border-slate-200/70">
+                        <div class="text-[11px] font-semibold text-slate-600 mb-2">各專案當月達成明細：</div>
+                        <div class="flex flex-wrap gap-2">
+                            ${projectBreakdown.map(p => `
+                                <div class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] flex items-center gap-2">
+                                    <span class="font-bold text-slate-800">${escapeHtml(p.name)}</span>
+                                    <span class="text-slate-500">換算 ${formatEquivalentCount(p.pEqPass)}/${formatEquivalentCount(p.pEqTotal)} 篇</span>
+                                    <span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold">${p.pRate}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : `<div class="mt-2 text-xs text-slate-400 text-center py-2">目前 ${ym} 尚無符合該月份上線日或預計上線月的文章資料</div>`}
+            `;
+        }
+
         function renderInternalKpisView() {
+            renderMonthlyKpiAchievement();
             const container = document.getElementById('internalKpisContainer');
             if (!container) return;
             const kpi = appState.internalKpis || DEFAULT_INTERNAL_KPIS;
@@ -2301,13 +2857,13 @@
                 bulkContractSel.innerHTML = renderContractSpecSelectOptions(prevSpecVal || '');
             }
 
-            if (!proj) {
+                if (!proj) {
                 titleEl.textContent = '專案規格與 KPI 核對（尚未選擇專案）';
                 if (statusBadge) statusBadge.classList.add('hidden');
                 if (toggleCloseBtn) toggleCloseBtn.classList.add('hidden');
                 if (summaryStats) summaryStats.innerHTML = '';
                 linksBar.innerHTML = '<div class="col-span-4 text-slate-400">請先點擊左上角「+」建立專案，再進行文章與規格核對。</div>';
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-8 text-slate-400">尚無專案資料</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">尚無專案資料</td></tr>';
                 if (flexBody) flexBody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">尚無專案資料</td></tr>';
                 return;
             }
@@ -2386,76 +2942,82 @@
 
                 return `
                     <tr class="hover:bg-slate-50/90 align-top ${selectedMap.articles.has(a.id) ? 'bg-rose-50/40' : ''}">
-                        <td class="py-3 px-3"><input type="checkbox" ${selectedMap.articles.has(a.id) ? 'checked' : ''} onchange="toggleSelectItem('articles', '${a.id}', this.checked)" class="rounded text-rose-600 mt-1"></td>
-                        <td class="py-3 px-3">
+                        <td class="py-2.5 px-2 text-center">
+                            <input type="checkbox" ${selectedMap.articles.has(a.id) ? 'checked' : ''} onchange="toggleSelectItem('articles', '${a.id}', this.checked)" class="rounded text-rose-600 mt-1">
+                        </td>
+                        <td class="py-2.5 px-2 break-words">
                             <div class="font-bold text-slate-900">${escapeHtml(a.code || '-')}</div>
                             <div class="text-[11px] text-slate-500 mt-0.5">${a.expectedMonth ? `預計 ${escapeHtml(a.expectedMonth)}` : '未填月份'}</div>
                         </td>
-                        <td class="py-3 px-3">
-                            <div class="font-semibold text-slate-800">${escapeHtml(a.item || '-')}</div>
+                        <td class="py-2.5 px-2 break-words">
+                            <div class="font-semibold text-slate-800 leading-snug">${escapeHtml(a.item || '-')}</div>
                             <div class="flex flex-wrap gap-1 mt-1">
                                 ${a.platform ? `<span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-medium">${escapeHtml(a.platform)}</span>` : ''}
                                 ${(a.contentType || a.category) ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">${escapeHtml(a.contentType || a.category)}</span>` : ''}
                             </div>
                         </td>
-                        <td class="py-3 px-3 text-slate-700 max-w-[140px]">
-                            <div class="line-clamp-2" title="${escapeHtml(a.plan || '')}">${escapeHtml(a.plan || '-')}</div>
+                        <td class="py-2.5 px-2 text-slate-700 break-words">
+                            <div class="line-clamp-3 leading-relaxed" title="${escapeHtml(a.plan || '')}">${escapeHtml(a.plan || '-')}</div>
                         </td>
-                        <td class="py-3 px-3">
-                            <select onchange="updateArticleContractSpec('${a.id}', this.value)" class="inline-input w-full max-w-[195px] text-xs font-medium text-blue-800 bg-blue-50/40 border-blue-200">
+                        <td class="py-2.5 px-2">
+                            <select onchange="updateArticleContractSpec('${a.id}', this.value)" class="inline-input w-full text-[11px] font-medium text-blue-800 bg-blue-50/40 border-blue-200">
                                 ${renderContractSpecSelectOptions(selectedSpecValue)}
                             </select>
-                            ${a.specName && !contractEval.spec ? `<div class="text-[10px] text-slate-400 mt-0.5">原匯入產品：${escapeHtml(a.specName)}</div>` : ''}
+                            ${contractEval.isAutoMatched ? `<div class="text-[10px] text-emerald-600 font-medium mt-0.5">✨ 自動讀取項目/平台/類型</div>` : ''}
+                            ${a.specName && !contractEval.spec ? `<div class="text-[10px] text-slate-400 mt-0.5 truncate" title="${escapeHtml(a.specName)}">原匯入：${escapeHtml(a.specName)}</div>` : ''}
                         </td>
-                        <td class="py-3 px-3">
-                            <input type="date" value="${escapeHtml(a.publishDate || '')}" onchange="updateArticleInline('${a.id}', 'publishDate', this.value)" class="inline-input w-[124px] text-slate-700" title="點擊修改實際上線日期">
+                        <td class="py-2.5 px-2">
+                            <input type="date" value="${escapeHtml(a.publishDate || '')}" onchange="updateArticleInline('${a.id}', 'publishDate', this.value)" class="inline-input w-full text-[11px] text-slate-700 px-1.5" title="點擊修改實際上線日期">
                         </td>
-                        <td class="py-3 px-3">
+                        <td class="py-2.5 px-2 space-y-1">
                             <div class="flex items-center gap-1">
-                                <input type="number" min="0" value="${Number(a.pv || 0)}" onchange="updateArticleInline('${a.id}', 'pv', this.value)" class="inline-input w-[72px] font-mono text-right" placeholder="PV" title="實績 PV 數">
-                                <span class="text-slate-300">/</span>
-                                <input type="number" min="0" value="${Number(a.likes || 0)}" onchange="updateArticleInline('${a.id}', 'likes', this.value)" class="inline-input w-[50px] font-mono text-right" placeholder="讚" title="實績愛心數">
-                                <span class="text-slate-300">/</span>
-                                <input type="number" min="0" value="${Number(a.comments || 0)}" onchange="updateArticleInline('${a.id}', 'comments', this.value)" class="inline-input w-[50px] font-mono text-right" placeholder="留" title="實績留言數">
+                                <span class="text-[10px] text-slate-400 w-5 shrink-0">PV</span>
+                                <input type="number" min="0" value="${Number(a.pv || 0)}" onchange="updateArticleInline('${a.id}', 'pv', this.value)" class="inline-input w-full font-mono text-right text-[11px] px-1.5" title="實績 PV 數">
                             </div>
-                            <div class="text-[10px] text-slate-400 mt-0.5">PV / 愛心 / 留言</div>
+                            <div class="grid grid-cols-2 gap-1">
+                                <input type="number" min="0" value="${Number(a.likes || 0)}" onchange="updateArticleInline('${a.id}', 'likes', this.value)" class="inline-input w-full font-mono text-right text-[11px] px-1" placeholder="讚" title="實績愛心數">
+                                <input type="number" min="0" value="${Number(a.comments || 0)}" onchange="updateArticleInline('${a.id}', 'comments', this.value)" class="inline-input w-full font-mono text-right text-[11px] px-1" placeholder="留" title="實績留言數">
+                            </div>
+                            <div class="text-[10px] text-slate-400 text-right">愛心 / 留言</div>
                         </td>
-                        <td class="py-3 px-3 space-y-1">
+                        <td class="py-2.5 px-2 space-y-1">
                             <div class="flex items-center gap-1">
-                                <span class="text-[11px] text-purple-700 font-medium">💬</span>
-                                <input type="number" min="0" value="${Number(a.flexCommentsUsed || 0)}" onchange="updateArticleInline('${a.id}', 'flexCommentsUsed', this.value)" class="inline-input w-[64px] font-mono text-right text-purple-800 border-purple-200 bg-purple-50/30" title="此篇文章使用的彈性留言則數">
-                                <span class="text-[11px] text-slate-500">則</span>
+                                <span class="text-[11px] text-purple-700 font-medium shrink-0">💬</span>
+                                <input type="number" min="0" value="${Number(a.flexCommentsUsed || 0)}" onchange="updateArticleInline('${a.id}', 'flexCommentsUsed', this.value)" class="inline-input w-full font-mono text-right text-[11px] text-purple-800 border-purple-200 bg-purple-50/30 px-1.5" title="此篇文章使用的彈性留言則數">
+                                <span class="text-[10px] text-slate-500 shrink-0">則</span>
                             </div>
                             <div class="flex items-center gap-1">
-                                <input type="url" value="${escapeHtml(a.completedUrl || '')}" onchange="updateArticleInline('${a.id}', 'completedUrl', this.value)" placeholder="貼上完成連結..." class="inline-input w-[128px] text-[11px] text-slate-700" title="貼上文章完成上線連結">
+                                <input type="url" value="${escapeHtml(a.completedUrl || '')}" onchange="updateArticleInline('${a.id}', 'completedUrl', this.value)" placeholder="完成連結..." class="inline-input w-full text-[11px] text-slate-700 px-1.5" title="貼上文章完成上線連結">
                                 ${hasLink ? `<a href="${escapeHtml(a.completedUrl)}" target="_blank" class="p-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 shrink-0" title="開啟完成連結"><i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
                             </div>
                         </td>
-                        <td class="py-3 px-3">
-                            <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${contractEval.badgeClass}">
-                                ${contractEval.badgeText}
-                            </span>
-                            <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(contractEval.detailText)}</div>
-                        </td>
-                        <td class="py-3 px-3 space-y-1">
-                            <select onchange="updateArticleKpiRule('${a.id}', this.value)" class="inline-input w-full max-w-[195px] text-[11px] text-slate-700">
-                                ${renderKpiRuleSelectOptions(currentRuleKey)}
-                            </select>
-                            <div class="flex items-center justify-between gap-1.5">
-                                <span class="text-[10px] ${kpiEval.matched ? 'text-emerald-600 font-medium' : 'text-slate-400'} truncate max-w-[115px]" title="${escapeHtml(kpiEval.statusText)}">${escapeHtml(kpiEval.statusText)}</span>
-                                <div class="flex items-center gap-0.5 shrink-0">
-                                    <span class="text-[11px] font-bold text-emerald-700">$</span>
-                                    <input type="number" min="0" value="${Number(a.bonus || 0)}" onchange="updateArticleManualBonus('${a.id}', this.value)" class="inline-input w-[62px] font-bold text-emerald-700 text-right" title="系統依規則自動核對，亦可手動微調金額">
+                        <td class="py-2.5 px-2 space-y-1.5">
+                            <div>
+                                <span class="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${contractEval.badgeClass}">
+                                    ${contractEval.badgeText}
+                                </span>
+                                <div class="text-[10px] text-slate-500 mt-0.5 leading-tight">${escapeHtml(contractEval.detailText)}</div>
+                            </div>
+                            <div class="pt-1 border-t border-slate-100 space-y-1">
+                                <select onchange="updateArticleKpiRule('${a.id}', this.value)" class="inline-input w-full text-[10px] text-slate-700 px-1.5">
+                                    ${renderKpiRuleSelectOptions(currentRuleKey)}
+                                </select>
+                                <div class="flex items-center justify-between gap-1">
+                                    <span class="text-[10px] ${kpiEval.matched ? 'text-emerald-600 font-medium' : 'text-slate-400'} truncate" title="${escapeHtml(kpiEval.statusText)}">${escapeHtml(kpiEval.statusText)}</span>
+                                    <div class="flex items-center gap-0.5 shrink-0">
+                                        <span class="text-[10px] font-bold text-emerald-700">$</span>
+                                        <input type="number" min="0" value="${Number(a.bonus || 0)}" onchange="updateArticleManualBonus('${a.id}', this.value)" class="inline-input w-[54px] font-bold text-emerald-700 text-right text-[11px] px-1" title="系統依規則自動核對，亦可手動微調金額">
+                                    </div>
                                 </div>
                             </div>
-                        </td>
-                        <td class="py-3 px-3 text-right whitespace-nowrap space-x-2">
-                            <button onclick="openEditArticleModal('${a.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
-                            <button onclick="openConfirmModal('確定要刪除文章「${escapeHtml(a.code || '').replace(/'/g, "\\'")}」嗎？', () => deleteProjectArticle('${a.id}'))" class="text-rose-600 hover:underline">刪除</button>
+                            <div class="flex justify-end gap-2 pt-0.5 text-[11px]">
+                                <button onclick="openEditArticleModal('${a.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
+                                <button onclick="openConfirmModal('確定要刪除文章「${escapeHtml(a.code || '').replace(/'/g, "\\'")}」嗎？', () => deleteProjectArticle('${a.id}'))" class="text-rose-600 hover:underline">刪除</button>
+                            </div>
                         </td>
                     </tr>
                 `;
-            }).join('') || `<tr><td colspan="11" class="text-center py-10 text-slate-400">尚無文章紀錄，請點擊右上方「匯入文章清冊 (XLSX/CSV)」或「新增單篇文章」</td></tr>`;
+            }).join('') || `<tr><td colspan="9" class="text-center py-10 text-slate-400">尚無文章紀錄，請點擊右上方「匯入文章清冊 (XLSX/CSV)」或「新增單篇文章」</td></tr>`;
 
             // 渲染獨立彈性留言使用紀錄表格
             if (flexSummaryBadge) {
@@ -2562,9 +3124,14 @@
             } else {
                 art[field] = value;
             }
+            if (field === 'publishDate' || field === 'completedUrl') {
+                syncProjectArticlesToCalendar();
+            }
             saveState();
+            if (field === 'publishDate') {
+                showToast(value ? `已更新上線日並同步至月曆 (${value})` : '已清除上線日並從月曆移除');
+            }
         }
-
         // 單篇文章手動選擇客戶成效規格庫
         function updateArticleContractSpec(artId, specId) {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
@@ -2573,35 +3140,13 @@
             if (!art) return;
 
             const spec = (appState.contractSpecs || []).find(s => s.id === specId);
+            art.specManualLock = true;
             art.specId = spec ? spec.id : '';
             art.specName = spec ? spec.name : '';
+            syncProjectArticlesToCalendar();
             saveState();
         }
 
-        // 批量套用客戶成效規格庫至勾選文章
-        function applyBulkContractSpecRule() {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
-            const selSpecId = document.getElementById('bulkContractSpecSelect')?.value || '';
-            const selectedIds = selectedMap.articles;
-            if (!selectedIds || selectedIds.size === 0) {
-                showToast('請先勾選左方要套用客戶規格的文章');
-                return;
-            }
-            const spec = (appState.contractSpecs || []).find(s => s.id === selSpecId);
-            let count = 0;
-            (proj.articles || []).forEach(art => {
-                if (selectedIds.has(art.id)) {
-                    art.specId = spec ? spec.id : '';
-                    art.specName = spec ? spec.name : '';
-                    count++;
-                }
-            });
-            saveState();
-            showToast(`已為 ${count} 篇文章套用客戶規格並完成檢測`);
-        }
-
-        // 切換內部 KPI 標準並自動計算獎金
         function updateArticleKpiRule(artId, ruleKey) {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
             if (!proj) return;
@@ -2616,7 +3161,6 @@
             saveState();
         }
 
-        // 手動微調單篇文章獎金金額
         function updateArticleManualBonus(artId, val) {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
             if (!proj) return;
@@ -2627,119 +3171,148 @@
             saveState();
         }
 
-        // 批量套用內部 KPI 標準至已勾選的文章
+        function applyBulkContractSpecRule() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const specId = document.getElementById('bulkContractSpecSelect')?.value || '';
+            const spec = (appState.contractSpecs || []).find(s => s.id === specId);
+            const selectedIds = selectedMap.articles;
+
+            if (selectedIds.size === 0) {
+                showToast('請先勾選左側核取方塊選取要套用客戶規格的文章');
+                return;
+            }
+
+            let count = 0;
+            (proj.articles || []).forEach(art => {
+                if (selectedIds.has(art.id)) {
+                    art.specManualLock = true;
+                    art.specId = spec ? spec.id : '';
+                    art.specName = spec ? spec.name : '';
+                    count++;
+                }
+            });
+            syncProjectArticlesToCalendar();
+            saveState();
+            showToast(`已為 ${count} 篇文章套用客戶成效規格`);
+        }
+
         function applyBulkKpiRule() {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
             if (!proj) return;
-            const ruleKey = document.getElementById('bulkKpiRuleSelect')?.value;
+            const ruleKey = document.getElementById('bulkKpiRuleSelect')?.value || 'none';
             const selectedIds = selectedMap.articles;
-            if (!selectedIds || selectedIds.size === 0) {
-                showToast('請先勾選左方要套用 KPI 標準的文章');
+
+            if (selectedIds.size === 0) {
+                showToast('請先勾選左側核取方塊選取要套用 KPI 標準的文章');
                 return;
             }
-            let updatedCount = 0;
+
+            let count = 0;
             (proj.articles || []).forEach(art => {
                 if (selectedIds.has(art.id)) {
                     art.kpiRuleKey = ruleKey;
-                    if (ruleKey && ruleKey !== 'none') {
+                    if (ruleKey !== 'none') {
                         art.bonus = computeArticleBonus(art).bonus;
                     }
-                    updatedCount++;
-                }
-            });
-            saveState();
-            showToast(`已為 ${updatedCount} 篇文章套用 KPI 標準並自動核對獎金`);
-        }
-
-        // 一鍵重算當前專案所有已設定 KPI 規則的文章獎金
-        function recalculateAllProjectBonuses() {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj || !proj.articles) return;
-            let count = 0;
-            proj.articles.forEach(art => {
-                if (art.kpiRuleKey && art.kpiRuleKey !== 'none') {
-                    art.bonus = computeArticleBonus(art).bonus;
                     count++;
                 }
             });
             saveState();
-            showToast(`已完成 ${count} 篇文章的 KPI 獎金重新核對`);
+            showToast(`已為 ${count} 篇文章套用內部 KPI 規則並完成獎金核對`);
         }
 
-        // ==================== XLSX / CSV 匯入專案文章清冊 ====================
+        function recalculateAllProjectBonuses() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            let updated = 0;
+            (proj.articles || []).forEach(art => {
+                if (art.kpiRuleKey && art.kpiRuleKey !== 'none') {
+                    art.bonus = computeArticleBonus(art).bonus;
+                    updated++;
+                }
+            });
+            saveState();
+            showToast(`已依內部 KPI 標準重新核對 ${updated} 篇文章獎金`);
+        }
+
+        // ==================== 匯入專案文章清冊 (XLSX / CSV) ====================
         async function handleImportProjectArticlesXlsx(e) {
-            const file = e.target.files[0];
+            const file = e.target.files?.[0];
             if (!file) return;
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
             if (!proj) {
-                showToast('請先建立或選擇一個專案後再匯入');
+                showToast('請先建立或選擇一個專案');
                 e.target.value = '';
                 return;
             }
 
             try {
                 const buf = await file.arrayBuffer();
-                const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+                let wb;
+                if (/\.csv$/i.test(file.name)) {
+                    const csvText = await decodeCalFileBuffer(buf);
+                    wb = XLSX.read(csvText, { type: 'string', raw: true });
+                } else {
+                    wb = XLSX.read(new Uint8Array(buf), { type: 'array', raw: true });
+                }
+
+                const date1904 = !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904);
                 let importedCount = 0;
 
-                wb.SheetNames.forEach(sn => {
-                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+                wb.SheetNames.forEach(sheetName => {
+                    const sheet = wb.Sheets[sheetName];
+                    if (!sheet) return;
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
                     if (!rows || rows.length === 0) return;
 
-                    let headerRowIdx = -1;
-                    let colMap = {};
-
-                    for (let r = 0; r < Math.min(rows.length, 15); r++) {
-                        const rowVals = rows[r].map(cell => String(cell).trim());
-                        if (rowVals.includes('編號') && (rowVals.includes('項目') || rowVals.includes('平台') || rowVals.includes('企劃'))) {
-                            headerRowIdx = r;
-                            rowVals.forEach((h, cIdx) => {
-                                if (h) colMap[h] = cIdx;
-                            });
+                    let headerIdx = -1;
+                    let headers = [];
+                    for (let i = 0; i < Math.min(rows.length, 25); i++) {
+                        const h = (rows[i] || []).map(trimCalHeader);
+                        if (h.some(col => ['編號', '文章編號', '文編', '項目', '平台', '企劃'].includes(col))) {
+                            headerIdx = i;
+                            headers = h;
                             break;
                         }
                     }
+                    if (headerIdx < 0) return;
 
-                    if (headerRowIdx === -1) {
-                        headerRowIdx = 0;
-                        colMap = {
-                            '編號': 0,
-                            '預計上線月': 1,
-                            '項目': 2,
-                            '平台': 3,
-                            '產品': 4,
-                            '內容類型': 5,
-                            '企劃': 6
-                        };
-                    }
-
-                    for (let r = headerRowIdx + 1; r < rows.length; r++) {
-                        const row = rows[r];
-                        if (!row || row.every(cell => String(cell).trim() === '')) continue;
-
-                        const getCell = (keys) => {
-                            for (const k of keys) {
-                                if (colMap[k] !== undefined && row[colMap[k]] !== undefined) {
-                                    return String(row[colMap[k]]).trim();
-                                }
+                    const getCell = (row, names) => {
+                        for (const name of names) {
+                            const idx = headers.indexOf(name);
+                            if (idx >= 0 && row[idx] !== undefined && row[idx] !== null) {
+                                return String(row[idx]).trim();
                             }
-                            return '';
-                        };
+                        }
+                        return '';
+                    };
 
-                        const code = getCell(['編號', '文章編號', '文編']);
-                        const expectedMonth = getCell(['預計上線月', '上線月', '月份']);
-                        const item = getCell(['項目', '切角', '主題']);
-                        const platform = getCell(['平台', '通路']);
-                        const product = getCell(['產品', '產品名稱', '規格']);
-                        const contentType = getCell(['內容類型', '類型', '文體分類']);
-                        const plan = getCell(['企劃', '企劃方向', '說明']);
+                    for (let r = headerIdx + 1; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || !row.some(cell => String(cell ?? '').trim() !== '')) continue;
+
+                        const code = getCell(row, ['編號', '文章編號', '文編']);
+                        const expectedMonth = getCell(row, ['預計上線月', '上線月', '月份']);
+                        const item = getCell(row, ['項目', '切角', '主題']);
+                        const platform = getCell(row, ['平台', '通路']);
+                        const product = getCell(row, ['產品', '產品名稱', '規格']);
+                        const contentType = getCell(row, ['內容類型', '類型', '文體分類']);
+                        const plan = getCell(row, ['企劃', '企劃方向', '說明']);
+                        const rawPubDate = getCell(row, ['上線日期', '實際上線日', '預計上線日', '日期']);
+                        const publishDate = normalizeCalendarDate(rawPubDate, date1904);
 
                         if (!code && !item && !plan) continue;
                         if (code === '編號' && item === '項目') continue;
 
-                        const matchedSpec = (appState.contractSpecs || []).find(s =>
-                            s.name === product || (product && s.name.includes(product)) || (product && product.includes(s.name))
-                        );
+                        const tempArt = {
+                            specName: product,
+                            item,
+                            platform,
+                            contentType,
+                            category: contentType
+                        };
+                        const matchedSpec = autoDetectContractSpecForArticle(tempArt);
 
                         proj.articles = proj.articles || [];
                         proj.articles.push({
@@ -2750,10 +3323,11 @@
                             platform,
                             specId: matchedSpec ? matchedSpec.id : '',
                             specName: matchedSpec ? matchedSpec.name : product,
+                            specManualLock: false,
                             contentType,
                             category: contentType,
                             plan,
-                            publishDate: '',
+                            publishDate,
                             pv: 0,
                             likes: 0,
                             comments: 0,
@@ -2767,8 +3341,9 @@
                 });
 
                 if (importedCount > 0) {
+                    syncProjectArticlesToCalendar();
                     saveState();
-                    showToast(`成功匯入 ${importedCount} 篇文章至「${proj.name}」！`);
+                    showToast(`成功匯入 ${importedCount} 篇文章（含上線日已自動同步月曆）！`);
                 } else {
                     showToast('未偵測到有效文章列，請確認 Excel 欄位包含：編號、預計上線月、項目、平台、產品、內容類型、企劃');
                 }
@@ -2784,29 +3359,31 @@
             if (!proj) return;
             proj.articles = (proj.articles || []).filter(a => a.id !== artId);
             selectedMap.articles.delete(artId);
+            syncProjectArticlesToCalendar();
             saveState();
-            showToast('已刪除文章');
+            showToast('已刪除文章並同步更新月曆');
         }
 
-        // ==================== 客戶成效規格庫與產品匯入 ====================
+        // ==================== 客戶成效規格庫管理 ====================
         function renderContractSpecsTable() {
             const tbody = document.getElementById('contractSpecsTableBody');
             if (!tbody) return;
-            tbody.innerHTML = appState.contractSpecs.map(s => `
-                <tr class="hover:bg-slate-50 transition ${selectedMap.contractSpecs.has(s.id) ? 'bg-rose-50/40' : ''}">
-                    <td class="py-3.5 px-4"><input type="checkbox" ${selectedMap.contractSpecs.has(s.id) ? 'checked' : ''} onchange="toggleSelectItem('contractSpecs', '${s.id}', this.checked)" class="rounded text-rose-600"></td>
-                    <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(s.name)}</td>
-                    <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.likes || 0).toLocaleString()}</td>
-                    <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.comments || 0).toLocaleString()}</td>
-                    <td class="py-3.5 px-4 font-semibold text-blue-700">${Number(s.pv || 0).toLocaleString()}</td>
-                    <td class="py-3.5 px-4 text-slate-600">${escapeHtml(s.quote || '-')}</td>
-                    <td class="py-3.5 px-4 text-slate-500 max-w-xs truncate" title="${escapeHtml(s.note || '')}">${escapeHtml(s.note || '-')}</td>
-                    <td class="py-3.5 px-4 text-right space-x-2">
+            const specs = appState.contractSpecs || [];
+            tbody.innerHTML = specs.map(s => `
+                <tr class="hover:bg-slate-50 ${selectedMap.contractSpecs.has(s.id) ? 'bg-rose-50/40' : ''}">
+                    <td class="py-3 px-4"><input type="checkbox" ${selectedMap.contractSpecs.has(s.id) ? 'checked' : ''} onchange="toggleSelectItem('contractSpecs', '${s.id}', this.checked)" class="rounded text-rose-600"></td>
+                    <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(s.name)}</td>
+                    <td class="py-3 px-4 font-mono text-blue-700">${Number(s.likes || 0).toLocaleString()}</td>
+                    <td class="py-3 px-4 font-mono text-blue-700">${Number(s.comments || 0).toLocaleString()}</td>
+                    <td class="py-3 px-4 font-mono text-blue-700">${Number(s.pv || 0).toLocaleString()}</td>
+                    <td class="py-3 px-4 text-slate-600">${escapeHtml(s.quote || '-')}</td>
+                    <td class="py-3 px-4 text-slate-600">${escapeHtml(s.content || '-')}</td>
+                    <td class="py-3 px-4 text-right space-x-2 whitespace-nowrap">
                         <button onclick="openEditContractSpecModal('${s.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
-                        <button onclick="openConfirmModal('確定要刪除產品「${escapeHtml(s.name).replace(/'/g, "\\'")}」嗎？', () => deleteContractSpec('${s.id}'))" class="text-rose-600 hover:underline font-medium">刪除</button>
+                        <button onclick="openConfirmModal('確定要刪除產品規格「${escapeHtml(s.name).replace(/'/g, "\\'")}」嗎？', () => { appState.contractSpecs = appState.contractSpecs.filter(x => x.id !== '${s.id}'); selectedMap.contractSpecs.delete('${s.id}'); saveState(); showToast('已刪除產品規格'); })" class="text-rose-600 hover:underline">刪除</button>
                     </td>
                 </tr>
-            `).join('') || `<tr><td colspan="8" class="text-center py-10 text-slate-400">尚無客戶規格，請點選上方按鈕手動新增或匯入《產品總表》Excel / CSV</td></tr>`;
+            `).join('') || '<tr><td colspan="8" class="text-center py-8 text-slate-400">尚無客戶產品規格資料，可點擊右上角「手動新增產品規格」或「匯入產品總表」</td></tr>';
         }
 
         function openNewContractSpecModal() {
@@ -2816,19 +3393,17 @@
         function openEditContractSpecModal(specId) {
             const existing = specId ? (appState.contractSpecs || []).find(s => s.id === specId) : null;
             const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = existing ? '編輯客戶產品規格' : '手動新增客戶產品規格';
+            document.getElementById('customModalTitle').textContent = existing ? `編輯產品規格 — ${existing.name}` : '手動新增客戶產品規格';
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div><label class="block font-semibold mb-1">產品名稱 *</label><input id="mSpecName" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="例如：核心主打精華液" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">產品名稱 *</label><input id="mSpecName" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="例如：核心產品 A" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     <div class="grid grid-cols-3 gap-2">
-                        <div><label class="block font-semibold mb-1">必達 PV 數</label><input id="mSpecPv" type="number" min="0" value="${existing?.pv ?? 5000}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">必達愛心數</label><input id="mSpecLikes" type="number" min="0" value="${existing?.likes ?? 50}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">必達留言數</label><input id="mSpecComments" type="number" min="0" value="${existing?.comments ?? 10}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">愛心門檻</label><input id="mSpecLikes" type="number" min="0" value="${existing?.likes ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">留言門檻</label><input id="mSpecComments" type="number" min="0" value="${existing?.comments ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">PV數門檻</label><input id="mSpecPv" type="number" min="0" value="${existing?.pv ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">引用</label><input id="mSpecQuote" type="text" value="${escapeHtml(existing?.quote || '-')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">備註內容</label><input id="mSpecNote" type="text" value="${escapeHtml(existing?.note || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
+                    <div><label class="block font-semibold mb-1">引用要求</label><input id="mSpecQuote" type="text" value="${escapeHtml(existing?.quote || '')}" placeholder="例如：需帶官網連結" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">內容規格備註</label><input id="mSpecContent" type="text" value="${escapeHtml(existing?.content || '')}" placeholder="例如：開箱實測＋對比圖" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                 </div>
             `;
             const btn = document.getElementById('customModalConfirmBtn');
@@ -2837,20 +3412,18 @@
             btn.onclick = () => {
                 const name = document.getElementById('mSpecName').value.trim();
                 if (!name) { showToast('請輸入產品名稱'); return; }
-                const obj = {
-                    id: existing?.id || ('cs_' + Date.now() + Math.random().toString(36).slice(2, 5)),
+                const specData = {
+                    id: existing?.id || ('spec_' + Date.now()),
                     name,
-                    pv: Number(document.getElementById('mSpecPv').value) || 0,
                     likes: Number(document.getElementById('mSpecLikes').value) || 0,
                     comments: Number(document.getElementById('mSpecComments').value) || 0,
-                    quote: document.getElementById('mSpecQuote').value.trim() || '-',
-                    note: document.getElementById('mSpecNote').value.trim()
+                    pv: Number(document.getElementById('mSpecPv').value) || 0,
+                    quote: document.getElementById('mSpecQuote').value.trim(),
+                    content: document.getElementById('mSpecContent').value.trim()
                 };
-                if (existing) {
-                    Object.assign(existing, obj);
-                } else {
-                    appState.contractSpecs.push(obj);
-                }
+                appState.contractSpecs = appState.contractSpecs || [];
+                if (existing) Object.assign(existing, specData);
+                else appState.contractSpecs.push(specData);
                 saveState();
                 closeCustomModal();
                 showToast(existing ? '已更新產品規格' : '已新增產品規格');
@@ -2860,72 +3433,105 @@
         }
 
         async function handleImportProductMasterTable(e) {
-            const file = e.target.files[0];
+            const file = e.target.files?.[0];
             if (!file) return;
             try {
                 const buf = await file.arrayBuffer();
-                const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-                let count = 0;
+                let wb;
+                if (/\.csv$/i.test(file.name)) {
+                    const csvText = await decodeCalFileBuffer(buf);
+                    wb = XLSX.read(csvText, { type: 'string', raw: true });
+                } else {
+                    wb = XLSX.read(new Uint8Array(buf), { type: 'array', raw: true });
+                }
+
+                let added = 0;
                 wb.SheetNames.forEach(sn => {
-                    XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }).forEach(r => {
-                        const name = r['產品名稱'] || r['品名'] || Object.values(r)[0];
-                        if (name && String(name).trim() !== '產品名稱') {
-                            appState.contractSpecs.push({
-                                id: 'cs_' + Date.now() + Math.random(),
-                                name: String(name).trim(),
-                                likes: Number(String(r['愛心'] || 0).replace(/,/g, '')) || 0,
-                                comments: Number(String(r['留言'] || 0).replace(/,/g, '')) || 0,
-                                pv: Number(String(r['PV數'] || r['PV'] || 0).replace(/,/g, '')) || 0,
-                                quote: String(r['引用'] || '-'),
-                                note: String(r['內容'] || '')
-                            });
-                            count++;
+                    const sheet = wb.Sheets[sn];
+                    if (!sheet) return;
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+                    let headerIdx = -1;
+                    let headers = [];
+                    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+                        const h = (rows[i] || []).map(trimCalHeader);
+                        if (h.some(col => ['產品名稱', '產品', '規格名稱'].includes(col))) {
+                            headerIdx = i;
+                            headers = h;
+                            break;
                         }
-                    });
+                    }
+                    if (headerIdx < 0) return;
+
+                    const getCell = (row, names) => {
+                        for (const name of names) {
+                            const idx = headers.indexOf(name);
+                            if (idx >= 0 && row[idx] !== undefined && row[idx] !== null) {
+                                return String(row[idx]).trim();
+                            }
+                        }
+                        return '';
+                    };
+
+                    for (let r = headerIdx + 1; r < rows.length; r++) {
+                        const row = rows[r];
+                        if (!row || !row.some(cell => String(cell ?? '').trim() !== '')) continue;
+                        const name = getCell(row, ['產品名稱', '產品', '規格名稱']);
+                        if (!name || name === '產品名稱') continue;
+
+                        appState.contractSpecs = appState.contractSpecs || [];
+                        appState.contractSpecs.push({
+                            id: 'spec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                            name,
+                            likes: Number(String(getCell(row, ['愛心', '愛心數'])).replace(/,/g, '')) || 0,
+                            comments: Number(String(getCell(row, ['留言', '留言數'])).replace(/,/g, '')) || 0,
+                            pv: Number(String(getCell(row, ['PV數', 'PV', '觀看數'])).replace(/,/g, '')) || 0,
+                            quote: getCell(row, ['引用']),
+                            content: getCell(row, ['內容', '備註'])
+                        });
+                        added++;
+                    }
                 });
-                saveState();
-                showToast(`成功匯入 ${count} 筆產品規格`);
-            } catch(err) {
+
+                if (added > 0) {
+                    saveState();
+                    showToast(`成功匯入 ${added} 筆產品規格！`);
+                } else {
+                    showToast('未偵測到產品規格列，請確認欄位包含「產品名稱」');
+                }
+            } catch (err) {
+                console.error('Import product specs failed:', err);
                 showToast('匯入失敗，請確認檔案格式');
             }
             e.target.value = '';
         }
 
-        function deleteContractSpec(id) {
-            appState.contractSpecs = appState.contractSpecs.filter(x => x.id !== id);
-            saveState();
-            showToast('已刪除產品規格');
-        }
-
         function deleteAllContractSpecs() {
             appState.contractSpecs = [];
+            selectedMap.contractSpecs.clear();
             saveState();
-            showToast('已清空全部產品規格');
+            showToast('已刪除全部產品規格');
         }
 
-        // ==================== 派案寫手、廠商與熱門文章 ====================
-        function toggleWriterDone(id) {
-            const item = (appState.writers || []).find(w => w.id === id);
-            if (item) {
-                item.done = !item.done;
-                if (item.calCardKey) {
-                    const calCard = (appState.calendarCards || []).find(c => c.key === item.calCardKey);
-                    if (calCard) calCard.done = item.done;
-                }
-                saveState();
+        function toggleWriterDone(writerId) {
+            const w = (appState.writers || []).find(x => x.id === writerId);
+            if (!w) return;
+            w.done = !w.done;
+            if (w.calCardKey) {
+                const card = (appState.calendarCards || []).find(c => c.key === w.calCardKey);
+                if (card) card.done = w.done;
             }
+            saveState();
         }
 
-        function deleteSingleWriter(id) {
-            const item = (appState.writers || []).find(w => w.id === id);
-            if (item && item.calCardKey) {
-                appState.calendarCards = (appState.calendarCards || []).filter(c => c.key !== item.calCardKey);
-                selectedMap.calendarCards.delete(item.calCardKey);
+        function deleteSingleWriter(writerId) {
+            const w = (appState.writers || []).find(x => x.id === writerId);
+            if (w && w.calCardKey) {
+                appState.calendarCards = (appState.calendarCards || []).filter(c => c.key !== w.calCardKey);
             }
-            appState.writers = (appState.writers || []).filter(x => x.id !== id);
-            selectedMap.writers.delete(id);
+            appState.writers = (appState.writers || []).filter(x => x.id !== writerId);
+            selectedMap.writers.delete(writerId);
             saveState();
-            showToast('已刪除派稿紀錄');
+            showToast('已刪除派稿紀錄並同步移除月曆卡片');
         }
 
         function renderVendorsWriters() {
@@ -3078,6 +3684,7 @@
                     existingProj.cueUrl = cueUrl;
                     existingProj.pmsUrl = pmsUrl;
                     existingProj.extraLinks = updatedExtraLinks;
+                    syncProjectArticlesToCalendar();
                 } else {
                     const newId = 'proj_' + Date.now();
                     appState.projects.push({
@@ -3229,7 +3836,23 @@
                 if (!code) { showToast('請輸入文章編號'); return; }
 
                 const selectedSpecId = document.getElementById('mArtSpec').value;
-                const specObj = (appState.contractSpecs || []).find(s => s.id === selectedSpecId);
+                const itemVal = document.getElementById('mArtItem').value.trim();
+                const platformVal = document.getElementById('mArtPlatform').value.trim();
+                const contentTypeVal = document.getElementById('mArtContentType').value.trim();
+
+                let specObj = (appState.contractSpecs || []).find(s => s.id === selectedSpecId);
+                let isManualLock = !!selectedSpecId;
+                // 若未手動指定規格，則自動依據項目 / 平台 / 類型比對
+                if (!specObj) {
+                    specObj = autoDetectContractSpecForArticle({
+                        item: itemVal,
+                        platform: platformVal,
+                        contentType: contentTypeVal,
+                        category: contentTypeVal
+                    });
+                    isManualLock = false;
+                }
+
                 const kpiRuleKey = document.getElementById('mArtKpiRule').value;
                 const pv = Number(document.getElementById('mArtPv').value) || 0;
                 const likes = Number(document.getElementById('mArtLikes').value) || 0;
@@ -3246,12 +3869,13 @@
                     id: existing?.id || ('art_' + Date.now()),
                     code,
                     expectedMonth: document.getElementById('mArtExpMonth').value.trim(),
-                    item: document.getElementById('mArtItem').value.trim(),
-                    platform: document.getElementById('mArtPlatform').value.trim(),
+                    item: itemVal,
+                    platform: platformVal,
                     specId: specObj ? specObj.id : '',
                     specName: specObj ? specObj.name : '',
-                    contentType: document.getElementById('mArtContentType').value.trim(),
-                    category: document.getElementById('mArtContentType').value.trim(),
+                    specManualLock: isManualLock,
+                    contentType: contentTypeVal,
+                    category: contentTypeVal,
                     plan: document.getElementById('mArtPlan').value.trim(),
                     flexCommentsUsed,
                     completedUrl,
@@ -3269,9 +3893,10 @@
                 } else {
                     proj.articles.push(updatedData);
                 }
+                syncProjectArticlesToCalendar();
                 saveState();
                 closeCustomModal();
-                showToast(existing ? '文章內容已更新' : '文章已新增');
+                showToast(existing ? '文章內容已更新並同步月曆' : '文章已新增並同步月曆');
             };
 
             modal.classList.remove('hidden');
@@ -3456,6 +4081,7 @@
             if (typeof window.initCloudSync === 'function') {
                 await window.initCloudSync();
             }
+            syncProjectArticlesToCalendar();
             renderAll();
         };
     </script>
