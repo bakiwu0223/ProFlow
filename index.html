@@ -214,7 +214,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 class="font-display text-2xl font-bold text-slate-900">ProFlow 專案執行總覽</h1>
-                        <p class="text-xs text-slate-500 mt-1">即時掌握合約篇數進度、客戶留言與彈性留言使用率（暗樁留言不計入額度）、每日待辦與團隊預估獎金</p>
+                        <p class="text-xs text-slate-500 mt-1">即時掌握合約篇數進度（須附完成連結）、彈性留言分配進度（爆文/矩陣/指標型內附留言不消耗額度）、每日待辦與團隊預估獎金</p>
                     </div>
                     <button onclick="openNewProjectModal()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-sm transition inline-flex items-center gap-2 w-fit">
                         <i data-lucide="folder-plus" class="w-4 h-4"></i>建立新專案
@@ -437,9 +437,9 @@
 
                 <!-- 核對規則提示說明 -->
                 <div class="bg-blue-50/70 border border-blue-200/80 rounded-xl px-4 py-2.5 text-[11px] text-blue-900 flex flex-wrap items-center gap-x-6 gap-y-1">
-                    <span class="font-bold">📌 核對判定規則：</span>
-                    <span>• <strong>客戶規格達標</strong>：PV 抓取「實際 PV」；若規格留言門檻為 <strong>5 則</strong>，系統自動核對「<strong>暗樁留言</strong>」；其餘客戶保證留言門檻（如 10 則、35 則等），則核對「<strong>客戶留言</strong>」。</span>
-                    <span>• <strong>內部 KPI 獎金</strong>：統一抓取實際「<strong>瀏覽 (PV) / 愛心 / 留言 / 分享(轉發)</strong>」數值核對門檻。</span>
+                    <span class="font-bold">📌 核對與額度判定規則：</span>
+                    <span>• <strong>Dashboard 篇數與留言</strong>：文章須填寫「<strong>完成連結</strong>」才計入篇數完成（矩陣組以子文章有填網址之篇數計入）；留言只要有登記「<strong>客戶留言</strong>」即直接計入完成（不強制完成連結）。</span>
+                    <span>• <strong>彈性留言額度豁免</strong>：<strong>FB爆文、Dcard爆文、矩陣20篇、矩陣50篇、指標型文章</strong>之「客戶留言」屬規格內附，<strong>不消耗</strong>客戶購買的彈性留言額度；一般文章之「客戶留言」與額外「彈性留言」才會扣除額度。</span>
                 </div>
 
                 <!-- 文章明細與實績核對表格（清晰分區寬版排版，支援橫向捲動不擠壓） -->
@@ -469,7 +469,7 @@
                                 </h2>
                                 <span id="flexCommentQuotaSummaryBadge" class="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 rounded-full font-semibold">總計：0 / 0 則</span>
                             </div>
-                            <p class="text-[11px] text-slate-400 mt-1">記錄開文以外額外使用的彈性留言（系統會自動與上方文章的「客戶留言 + 彈性留言」加總計算進 Dashboard 進度條；暗樁留言不計入）</p>
+                            <p class="text-[11px] text-slate-400 mt-1">記錄開文以外額外使用的彈性留言（會與一般文章「客戶留言」及「文章彈性留言」加總計算；FB/Dcard爆文、矩陣20/50篇、指標型文章內附之客戶留言與暗樁留言均不消耗此額度）</p>
                         </div>
                         <button onclick="openFlexCommentModal()" class="bg-purple-700 hover:bg-purple-800 text-white text-xs font-medium px-3.5 py-2 rounded-xl shadow-sm transition inline-flex items-center gap-1.5 w-fit">
                             <i data-lucide="plus" class="w-3.5 h-3.5"></i>新增彈性留言使用
@@ -643,7 +643,7 @@
                         <div class="flex items-center justify-between gap-2">
                             <div>
                                 <h2 class="font-display text-base font-bold text-slate-900">派案寫手進度追蹤</h2>
-                                <p class="text-[11px] text-slate-400">新增後將同步建立排程卡片至行事曆</p>
+                                <p class="text-[11px] text-slate-400">新增後將同步建立排程卡片至行事曆（回稿日當天）</p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <button id="bulkDelWritersBtn" onclick="bulkDeleteItems('writers')" class="hidden text-xs bg-rose-600 text-white hover:bg-rose-700 px-3 py-1.5 rounded-lg font-medium transition">刪除已選 (<span id="selCount_writers">0</span>)</button>
@@ -1074,6 +1074,8 @@
             ],
             internalKpis: JSON.parse(JSON.stringify(DEFAULT_INTERNAL_KPIS)),
             projects: [],
+            deletedDefaultProjects: [], // 記錄已手動刪除的預設專案，避免被重新自動建立
+            defaultsSeeded: false,
             todos: [],
             calendarCards: [],
             writers: [],
@@ -1090,6 +1092,9 @@
                     delete window.appState.accessPassHash;
                     if (!Array.isArray(window.appState.contractSpecs)) {
                         window.appState.contractSpecs = [];
+                    }
+                    if (!Array.isArray(window.appState.deletedDefaultProjects)) {
+                        window.appState.deletedDefaultProjects = [];
                     }
                 }
             }
@@ -1175,7 +1180,12 @@
         // ==================== 專案列表與專案切換 ====================
         function getProjectsList() {
             const set = new Set();
-            BASE_PROJECTS.forEach(p => set.add(p));
+            const deletedDefaults = new Set(appState.deletedDefaultProjects || []);
+            if (!appState.defaultsSeeded && (!appState.projects || appState.projects.length === 0)) {
+                BASE_PROJECTS.forEach(p => {
+                    if (!deletedDefaults.has(p)) set.add(p);
+                });
+            }
             (appState.projects || []).forEach(p => {
                 if (p && p.name) set.add(p.name);
             });
@@ -1274,27 +1284,40 @@
 
         function ensureDefaultProjects() {
             appState.projects = appState.projects || [];
-            BASE_PROJECTS.forEach(name => {
-                if (!appState.projects.some(p => p.name === name)) {
-                    appState.projects.push({
-                        id: 'proj_def_' + Math.random().toString(36).slice(2, 8),
-                        name,
-                        targetArticles: 10,
-                        targetFlexComments: 0,
-                        targetLikesQuota: 0,
-                        customQuotas: [],
-                        dueDate: '2026-12-31',
-                        articles: [],
-                        flexCommentLogs: [],
-                        likeUsageLogs: [],
-                        projectNotes: [],
-                        extraLinks: []
-                    });
-                }
-            });
-            if (!appState.currentProjectId && appState.projects.length > 0) {
+            appState.deletedDefaultProjects = appState.deletedDefaultProjects || [];
+            const deletedSet = new Set(appState.deletedDefaultProjects);
+
+            // 僅在初次初始化（尚無任何專案且未曾初始化過）時建立預設專案；已刪除的專案絕不復活
+            if (!appState.defaultsSeeded && appState.projects.length === 0 && deletedSet.size === 0) {
+                BASE_PROJECTS.forEach(name => {
+                    if (!deletedSet.has(name) && !appState.projects.some(p => p.name === name)) {
+                        appState.projects.push({
+                            id: 'proj_def_' + Math.random().toString(36).slice(2, 8),
+                            name,
+                            targetArticles: 10,
+                            targetFlexComments: 0,
+                            targetLikesQuota: 0,
+                            customQuotas: [],
+                            dueDate: '2026-12-31',
+                            articles: [],
+                            flexCommentLogs: [],
+                            likeUsageLogs: [],
+                            projectNotes: [],
+                            extraLinks: []
+                        });
+                    }
+                });
+                appState.defaultsSeeded = true;
+            } else if (appState.projects.length > 0 || deletedSet.size > 0) {
+                appState.defaultsSeeded = true;
+            }
+
+            if (appState.currentProjectId && !appState.projects.some(p => p.id === appState.currentProjectId)) {
+                appState.currentProjectId = appState.projects.length > 0 ? appState.projects[0].id : '';
+            } else if (!appState.currentProjectId && appState.projects.length > 0) {
                 appState.currentProjectId = appState.projects[0].id;
             }
+
             if (!appState.contractSpecs || appState.contractSpecs.length === 0) {
                 appState.contractSpecs = [
                     { id: 'spec_default_1', name: 'Threads口碑文', likes: 0, comments: 5, pv: 0, quote: '暗樁基礎互動 5 則', content: 'FB社團 / Threads 口碑貼文' },
@@ -1367,6 +1390,45 @@
                 comments: Number(article.comments || 0),
                 shares: Number(article.shares || 0)
             };
+        }
+
+        // 判斷該文章是否屬於「規格內附留言，不消耗客戶彈性留言額度」的類型
+        // 包含：FB爆文、Dcard爆文、矩陣20篇、矩陣50篇、指標型文章
+        function isIncludedCommentSpecArticle(article, specObj = null) {
+            const resolvedSpec = specObj || findMatchedContractSpec(article);
+            const rawText = `${resolvedSpec?.name || ''} ${article?.specName || ''} ${article?.item || ''} ${article?.contentType || ''} ${article?.category || ''} ${article?.platform || ''}`;
+            const normalized = rawText.replace(/\s+/g, '').toLowerCase();
+
+            // 1. 矩陣20篇 / 矩陣50篇（或子文章陣列長度為 20 / 50）
+            if (/矩陣20|矩陣50|20篇|50篇/.test(normalized)) return true;
+            if (Array.isArray(article?.subArticles) && (article.subArticles.length === 20 || article.subArticles.length === 50)) return true;
+
+            // 2. FB爆文 / Dcard爆文
+            if (/(fb|facebook|臉書).*爆文|爆文.*(fb|facebook|臉書)/.test(normalized)) return true;
+            if (/(dcard|狄卡).*爆文|爆文.*(dcard|狄卡)/.test(normalized)) return true;
+
+            // 3. 指標型文章
+            if (/指標型|指標文章/.test(normalized)) return true;
+
+            return false;
+        }
+
+        // 計算單篇文章在 Dashboard 篇數進度中「已附上完成連結」的完成篇數
+        function getArticleCompletedLinkCount(article) {
+            if (Array.isArray(article?.subArticles) && article.subArticles.length > 0) {
+                const subCompleted = article.subArticles.filter(s => String(s.url || '').trim() !== '').length;
+                if (subCompleted > 0) return subCompleted;
+                return String(article?.completedUrl || '').trim() !== '' ? article.subArticles.length : 0;
+            }
+            return String(article?.completedUrl || '').trim() !== '' ? 1 : 0;
+        }
+
+        // 計算單篇文章在 Dashboard 篇數進度中的「總應計篇數」（矩陣組以子篇數計，單篇計 1）
+        function getArticleTotalSlotCount(article) {
+            if (Array.isArray(article?.subArticles) && article.subArticles.length > 0) {
+                return article.subArticles.length;
+            }
+            return 1;
         }
 
         /**
@@ -1711,11 +1773,17 @@
             if (overviewEl) {
                 overviewEl.innerHTML = activeProjects.map(p => {
                     const articles = p.articles || [];
+                    // 規則 6：Dashboard 篇數紀錄必須放「完成連結」才算完成
+                    const completedArticleCount = articles.reduce((sum, a) => sum + getArticleCompletedLinkCount(a), 0);
+                    const registeredArticleCount = articles.reduce((sum, a) => sum + getArticleTotalSlotCount(a), 0);
                     const targetArticles = Number(p.targetArticles || 10);
-                    const articleProgress = Math.min(100, Math.round((articles.length / (targetArticles || 1)) * 100));
+                    const articleProgress = Math.min(100, Math.round((completedArticleCount / (targetArticles || 1)) * 100));
 
+                    // 規則 1、2、3、6：彈性留言計算（FB爆文/dcard爆文/矩陣20/50篇/指標型內附留言不消耗額度；只要有登記客戶留言即算完成；超標顯示警示）
                     const flexStats = getProjectFlexCommentStats(p);
-                    const flexProgress = flexStats.totalQuota > 0 ? Math.min(100, Math.round((flexStats.totalUsed / flexStats.totalQuota) * 100)) : 0;
+                    const flexProgress = flexStats.totalQuota > 0
+                        ? Math.min(100, Math.round((flexStats.totalUsed / flexStats.totalQuota) * 100))
+                        : (flexStats.totalUsed > 0 ? 100 : 0);
 
                     const likeStats = getProjectLikeStats(p);
                     const likeProgress = likeStats.totalQuota > 0 ? Math.min(100, Math.round((likeStats.completedUsed / likeStats.totalQuota) * 100)) : 0;
@@ -1723,11 +1791,12 @@
                     const customQuotas = p.customQuotas || [];
 
                     return `
-                        <div class="p-4 rounded-xl border border-slate-200/80 bg-white space-y-3">
+                        <div class="p-4 rounded-xl border ${flexStats.isOver ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200/80'} bg-white space-y-3">
                             <div class="flex items-center justify-between gap-2">
                                 <div class="flex items-center gap-2">
                                     <input type="checkbox" ${selectedMap.projects.has(p.id) ? 'checked' : ''} onchange="toggleSelectItem('projects', '${p.id}', this.checked)" class="rounded text-rose-600">
                                     <h3 class="font-bold text-slate-900">${escapeHtml(p.name)}</h3>
+                                    ${flexStats.isOver ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold animate-pulse">⚠️ 彈性留言已超標 +${flexStats.overAmount} 則</span>` : ''}
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <button onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium">進入規格核對</button>
@@ -1737,13 +1806,20 @@
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
                                 <div class="bg-slate-50 p-2.5 rounded-lg space-y-1">
-                                    <div class="flex justify-between font-semibold"><span class="text-slate-600">📄 篇數進度</span><span>${articles.length} / ${targetArticles} 篇 (${articleProgress}%)</span></div>
+                                    <div class="flex justify-between font-semibold"><span class="text-slate-600">📄 篇數完成 (須附連結)</span><span>${completedArticleCount} / ${targetArticles} 篇 (${articleProgress}%)</span></div>
                                     <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden"><div class="h-full bg-blue-600 rounded-full" style="width:${articleProgress}%"></div></div>
+                                    <div class="text-[10px] text-slate-500">已登記：${registeredArticleCount} 篇（未附連結：${Math.max(0, registeredArticleCount - completedArticleCount)} 篇）</div>
                                 </div>
-                                <div class="bg-purple-50/50 p-2.5 rounded-lg space-y-1">
-                                    <div class="flex justify-between font-semibold"><span class="text-purple-900">💬 計入留言 (客戶+彈性)</span><span>${flexStats.totalUsed} / ${flexStats.totalQuota} 則 (${flexProgress}%)</span></div>
-                                    <div class="w-full h-1.5 bg-purple-200 rounded-full overflow-hidden"><div class="h-full bg-purple-600 rounded-full" style="width:${flexProgress}%"></div></div>
-                                    <div class="text-[10px] text-slate-500">暗樁留言：${flexStats.shillTotal} 則 (不計入額度)</div>
+                                <div class="${flexStats.isOver ? 'bg-rose-50 border border-rose-300' : 'bg-purple-50/50'} p-2.5 rounded-lg space-y-1">
+                                    <div class="flex justify-between font-semibold">
+                                        <span class="${flexStats.isOver ? 'text-rose-800' : 'text-purple-900'}">💬 彈性留言分配 (已登記客戶留言)</span>
+                                        <span class="${flexStats.isOver ? 'text-rose-700 font-bold' : ''}">${flexStats.totalUsed} / ${flexStats.totalQuota} 則 (${flexStats.totalQuota > 0 ? Math.round((flexStats.totalUsed / flexStats.totalQuota) * 100) : (flexStats.totalUsed > 0 ? 100 : 0)}%)</span>
+                                    </div>
+                                    <div class="w-full h-1.5 ${flexStats.isOver ? 'bg-rose-200' : 'bg-purple-200'} rounded-full overflow-hidden"><div class="h-full ${flexStats.isOver ? 'bg-rose-600' : 'bg-purple-600'} rounded-full" style="width:${flexProgress}%"></div></div>
+                                    ${flexStats.isOver
+                                        ? `<div class="text-[10px] text-rose-700 font-bold">🚨 警示：彈性留言超標 ${flexStats.overAmount} 則！（消耗 ${flexStats.totalUsed} / 購買 ${flexStats.totalQuota}）</div>`
+                                        : `<div class="text-[10px] text-slate-500">剩餘 ${flexStats.remaining} 則｜規格內附豁免 ${flexStats.exemptClientComments} 則 · 暗樁 ${flexStats.shillTotal} 則</div>`
+                                    }
                                 </div>
                                 <div class="bg-rose-50/50 p-2.5 rounded-lg space-y-1">
                                     <div class="flex justify-between font-semibold"><span class="text-rose-900">❤️ 愛心額度 (已附連結)</span><span>${likeStats.completedUsed.toLocaleString()} / ${likeStats.totalQuota.toLocaleString()} 顆 (${likeProgress}%)</span></div>
@@ -1763,6 +1839,8 @@
             }
 
             const closedListEl = document.getElementById('dashboardClosedProjectsList');
+            const closedBadgeEl = document.getElementById('closedProjectsBadge');
+            if (closedBadgeEl) closedBadgeEl.textContent = `共 ${closedProjects.length} 筆已結案`;
             if (closedListEl) {
                 closedListEl.innerHTML = closedProjects.map(p => `
                     <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
@@ -1868,7 +1946,7 @@
             return `
                 <div class="card ${c.done ? 'done' : ''} ${isSelected ? 'selected' : ''}" style="--p:${color}; --pbg:${color}10; --pborder:${color}40;" onclick="openEditor('${c.key}')">
                     <div class="cardhead">
-                        <span class="project">📌 ${escapeHtml(c.project)} (${escapeHtml(c.id || '')})</span>
+                        <span class="project">📌 ${escapeHtml(c.project)} ${c.id ? '(' + escapeHtml(c.id) + ')' : ''}</span>
                         <div class="checkline" onclick="event.stopPropagation()">
                             <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleSelectItem('calendarCards', '${c.key}', this.checked)" class="rounded text-blue-700">
                             <input type="checkbox" ${c.done ? 'checked' : ''} onchange="toggleCardDone('${c.key}')" class="rounded text-emerald-600" title="完成核實">
@@ -2150,6 +2228,31 @@
             });
         }
 
+        function removeProjectsCompletely(projectIdsSet) {
+            const toRemove = (appState.projects || []).filter(p => projectIdsSet.has(p.id));
+            const removedNames = new Set(toRemove.map(p => p.name));
+
+            // 記錄被刪除的預設專案名稱，確保不會重新自動生成
+            appState.deletedDefaultProjects = appState.deletedDefaultProjects || [];
+            removedNames.forEach(name => {
+                if (BASE_PROJECTS.includes(name) && !appState.deletedDefaultProjects.includes(name)) {
+                    appState.deletedDefaultProjects.push(name);
+                }
+            });
+
+            // 同步清理該專案在月曆上的自動同步卡片（保留手動建立或其他專案的卡片）
+            appState.calendarCards = (appState.calendarCards || []).filter(c => {
+                if (c.sourceProjectId && projectIdsSet.has(c.sourceProjectId)) return false;
+                return true;
+            });
+
+            appState.projects = (appState.projects || []).filter(p => !projectIdsSet.has(p.id));
+
+            if (projectIdsSet.has(appState.currentProjectId)) {
+                appState.currentProjectId = appState.projects.length > 0 ? appState.projects[0].id : '';
+            }
+        }
+
         function bulkDeleteItems(group) {
             const count = selectedMap[group].size;
             if (count === 0) return;
@@ -2167,15 +2270,19 @@
                 } else if (group === 'todos') {
                     appState.todos = (appState.todos || []).filter(t => !selectedMap.todos.has(t.id));
                 } else if (group === 'writers') {
+                    const removedWriters = (appState.writers || []).filter(w => selectedMap.writers.has(w.id));
+                    const cardKeys = new Set(removedWriters.map(w => w.calCardKey).filter(Boolean));
+                    appState.calendarCards = (appState.calendarCards || []).filter(c => !cardKeys.has(c.key));
                     appState.writers = (appState.writers || []).filter(w => !selectedMap.writers.has(w.id));
                 } else if (group === 'vendors') {
                     appState.vendors = (appState.vendors || []).filter(v => !selectedMap.vendors.has(v.id));
                 } else if (group === 'hotArticles') {
                     appState.hotArticles = (appState.hotArticles || []).filter(h => !selectedMap.hotArticles.has(h.id));
                 } else if (group === 'projects') {
-                    appState.projects = (appState.projects || []).filter(p => !selectedMap.projects.has(p.id));
+                    removeProjectsCompletely(new Set(selectedMap.projects));
                 }
                 selectedMap[group].clear();
+                updateBulkDeleteButtons();
                 saveState();
                 showToast(`已成功刪除 ${count} 筆資料`);
             });
@@ -2235,13 +2342,17 @@
         window.deleteTodo = deleteTodo;
 
         function deleteCurrentProjectWithConfirm() {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
+            const proj = (appState.projects || []).find(p => p.id === appState.currentProjectId);
+            if (!proj) {
+                showToast('目前無可刪除的專案');
+                return;
+            }
             openConfirmModal(`確定要永久刪除專案「${proj.name}」及其所有文章與紀錄嗎？`, () => {
-                appState.projects = appState.projects.filter(p => p.id !== proj.id);
-                appState.currentProjectId = appState.projects.length > 0 ? appState.projects[0].id : '';
+                selectedMap.projects.delete(proj.id);
+                removeProjectsCompletely(new Set([proj.id]));
+                updateBulkDeleteButtons();
                 saveState();
-                showToast('已刪除專案');
+                showToast(`已刪除專案「${proj.name}」`);
             });
         }
         window.deleteCurrentProjectWithConfirm = deleteCurrentProjectWithConfirm;
@@ -2772,10 +2883,11 @@
             if (activeList) {
                 activeList.innerHTML = activeProjects.map(p => {
                     const isActive = p.id === appState.currentProjectId;
+                    const completedCnt = (p.articles || []).reduce((s, a) => s + getArticleCompletedLinkCount(a), 0);
                     return `
                         <button type="button" onclick="switchProject('${p.id}'); switchTab('projectDetail');" class="w-full px-2.5 py-1.5 rounded-lg text-left text-xs flex items-center justify-between transition ${isActive ? 'bg-blue-50 text-blue-800 font-bold' : 'text-slate-600 hover:bg-slate-100'}">
                             <span class="truncate">${escapeHtml(p.name)}</span>
-                            <span class="text-[10px] text-slate-400 shrink-0 ml-1">${(p.articles || []).length}/${p.targetArticles || 0}</span>
+                            <span class="text-[10px] text-slate-400 shrink-0 ml-1">${completedCnt}/${p.targetArticles || 0}</span>
                         </button>
                     `;
                 }).join('') || '<div class="text-[11px] text-slate-400 px-2 py-1">尚無執行中專案</div>';
@@ -2808,14 +2920,27 @@
             if (detailSel) detailSel.innerHTML = optionsHtml;
         }
 
+        /**
+         * 彈性留言額度統計：
+         * 1. FB爆文、Dcard爆文、矩陣20篇、矩陣50篇、指標型文章 因為規格內附留言，不消耗客戶購買的彈性留言額度（歸類至 exemptClientComments）。
+         * 2. 其他一般文章只要有登記「客戶留言 (clientComments)」，即直接計入已完成分配（不需要完成連結），並消耗彈性留言額度。
+         * 3. 文章上額外填寫的「彈性留言 (flexCommentsUsed)」與獨立彈性留言紀錄「flexCommentLogs」同樣消耗額度。
+         * 4. 若 totalUsed > totalQuota（或 totalQuota === 0 且 totalUsed > 0），標記 isOver = true 觸發 Dashboard 警示。
+         */
         function getProjectFlexCommentStats(proj) {
             const totalQuota = Number(proj.targetFlexComments || 0);
-            let clientUsed = 0;
+            let clientUsed = 0;            // 消耗彈性額度的客戶留言（一般文章）
+            let exemptClientComments = 0;  // 規格內附不消耗額度的客戶留言（FB爆文/Dcard爆文/矩陣20/50/指標型）
             let articleFlexUsed = 0;
             let shillTotal = 0;
 
             (proj.articles || []).forEach(a => {
-                clientUsed += Number(a.clientComments || 0);
+                const cmt = Number(a.clientComments || 0);
+                if (isIncludedCommentSpecArticle(a)) {
+                    exemptClientComments += cmt;
+                } else {
+                    clientUsed += cmt;
+                }
                 articleFlexUsed += Number(a.flexCommentsUsed || 0);
                 shillTotal += Number(a.shillComments || 0);
             });
@@ -2823,8 +2948,21 @@
             const extraFlexUsed = (proj.flexCommentLogs || []).reduce((sum, f) => sum + Number(f.count || 0), 0);
             const totalUsed = clientUsed + articleFlexUsed + extraFlexUsed;
             const remaining = Math.max(0, totalQuota - totalUsed);
+            const isOver = totalUsed > totalQuota;
+            const overAmount = isOver ? (totalUsed - totalQuota) : 0;
 
-            return { totalQuota, clientUsed, articleFlexUsed, extraFlexUsed, totalUsed, shillTotal, remaining };
+            return {
+                totalQuota,
+                clientUsed,
+                exemptClientComments,
+                articleFlexUsed,
+                extraFlexUsed,
+                totalUsed,
+                shillTotal,
+                remaining,
+                isOver,
+                overAmount
+            };
         }
 
         function getProjectLikeStats(proj) {
@@ -3033,6 +3171,7 @@
             }
 
             const articles = proj.articles || [];
+            const completedArticleCount = articles.reduce((sum, a) => sum + getArticleCompletedLinkCount(a), 0);
             const flexStats = getProjectFlexCommentStats(proj);
             const totalFlexOnly = flexStats.articleFlexUsed + flexStats.extraFlexUsed;
             const likeStats = getProjectLikeStats(proj);
@@ -3047,8 +3186,8 @@
 
             if (summaryStats) {
                 summaryStats.innerHTML = `
-                    <div><span class="text-slate-400">篇數：</span><strong class="text-slate-900">${articles.length} / ${Number(proj.targetArticles || 0)} 篇</strong></div>
-                    <div><span class="text-slate-400">計入進度留言：</span><strong class="text-purple-700">${flexStats.totalUsed} / ${flexStats.totalQuota} 則</strong> <span class="text-[11px] text-slate-500">(客戶 ${flexStats.clientUsed} + 彈性 ${totalFlexOnly})</span></div>
+                    <div><span class="text-slate-400">附連結完成篇數：</span><strong class="text-slate-900">${completedArticleCount} / ${Number(proj.targetArticles || 0)} 篇</strong></div>
+                    <div><span class="text-slate-400">消耗彈性留言：</span><strong class="${flexStats.isOver ? 'text-rose-700' : 'text-purple-700'}">${flexStats.totalUsed} / ${flexStats.totalQuota} 則${flexStats.isOver ? ` (⚠️超標+${flexStats.overAmount})` : ''}</strong> <span class="text-[11px] text-slate-500">(一般客戶留 ${flexStats.clientUsed} + 彈性 ${totalFlexOnly}｜規格內附豁免 ${flexStats.exemptClientComments})</span></div>
                     <div><span class="text-slate-400">❤️ 愛心額度：</span><strong class="text-rose-600">${likeStats.completedUsed.toLocaleString()} / ${likeStats.totalQuota.toLocaleString()} 顆</strong></div>
                     <div><span class="text-slate-400">暗樁留言(不計額度)：</span><strong class="text-slate-600">${flexStats.shillTotal} 則</strong></div>
                     ${customQuotas.map(q => `<div><span class="text-slate-400">${escapeHtml(q.name || '自訂')}：</span><strong class="text-slate-800">${escapeHtml(q.target || '-')}</strong></div>`).join('')}
@@ -3061,6 +3200,7 @@
             tbody.innerHTML = articles.map(a => {
                 const contractEval = evaluateContractSpecStatus(a);
                 const selectedSpecValue = contractEval.spec ? contractEval.spec.id : '';
+                const isExempt = isIncludedCommentSpecArticle(a, contractEval.spec);
                 const matrixTargetCount = detectMatrixTargetCount(a, contractEval.spec);
                 if (matrixTargetCount > 0 && (!Array.isArray(a.subArticles) || a.subArticles.length === 0)) {
                     ensureMatrixSubArticles(a, matrixTargetCount);
@@ -3086,6 +3226,7 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold text-[11px]">#${escapeHtml(a.code || '-')}</span>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold text-[11px]">${a.expectedMonth ? `預計 ${escapeHtml(a.expectedMonth)}` : '未填月份'}</span>
                                 ${isMatrixGroup ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-700 text-white font-bold text-[10px]">🟪 矩陣 ${metrics.subCount} 篇組</span>` : ''}
+                                ${isExempt ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 font-semibold text-[10px]" title="FB爆文/Dcard爆文/矩陣20/50篇/指標型文章內附留言不消耗彈性留言額度">內附留言免扣彈性</span>` : ''}
                             </div>
                             <div class="font-bold text-slate-900 text-[13px] leading-snug">${escapeHtml(a.item || '-')}</div>
                             <div>
@@ -3171,8 +3312,8 @@
                         <!-- 5. 留言配置 & 完成連結 -->
                         <td class="py-3.5 px-3 space-y-2">
                             <div class="grid grid-cols-3 gap-1.5">
-                                <div class="bg-blue-50/40 border border-blue-100 rounded-lg p-1.5">
-                                    <div class="text-[10px] font-semibold text-blue-700 mb-1">客戶留言</div>
+                                <div class="${isExempt ? 'bg-teal-50/60 border-teal-200' : 'bg-blue-50/40 border-blue-100'} border rounded-lg p-1.5">
+                                    <div class="text-[10px] font-semibold ${isExempt ? 'text-teal-700' : 'text-blue-700'} mb-1">${isExempt ? '客戶留(豁免)' : '客戶留言'}</div>
                                     <input type="number" min="0" value="${Number(a.clientComments || 0)}" onchange="updateArticleInline('${a.id}', 'clientComments', this.value)" class="inline-input w-full font-mono text-right text-[11px] text-blue-900 bg-white">
                                 </div>
                                 <div class="bg-slate-50 border border-slate-200/80 rounded-lg p-1.5">
@@ -3292,9 +3433,11 @@
 
             // 渲染獨立彈性留言使用紀錄表格
             if (flexSummaryBadge) {
-                const isOver = flexStats.totalQuota > 0 && flexStats.totalUsed > flexStats.totalQuota;
-                flexSummaryBadge.className = `text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${isOver ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`;
-                flexSummaryBadge.textContent = `全專案計入進度合計：${flexStats.totalUsed} / ${flexStats.totalQuota} 則（客戶 ${flexStats.clientUsed} + 文章彈性 ${flexStats.articleFlexUsed} + 獨立彈性 ${flexStats.extraFlexUsed} · 剩餘 ${flexStats.remaining} 則｜暗樁 ${flexStats.shillTotal} 則不計入額度）`;
+                const isOver = flexStats.isOver;
+                flexSummaryBadge.className = `text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${isOver ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-purple-50 text-purple-700 border-purple-200'}`;
+                flexSummaryBadge.textContent = isOver
+                    ? `⚠️ 彈性留言已超標 +${flexStats.overAmount} 則：消耗 ${flexStats.totalUsed} / 購買 ${flexStats.totalQuota} 則（一般客戶留 ${flexStats.clientUsed} + 文章彈性 ${flexStats.articleFlexUsed} + 獨立彈性 ${flexStats.extraFlexUsed}｜規格內附豁免 ${flexStats.exemptClientComments} 則）`
+                    : `彈性留言消耗合計：${flexStats.totalUsed} / ${flexStats.totalQuota} 則（一般客戶留 ${flexStats.clientUsed} + 文章彈性 ${flexStats.articleFlexUsed} + 獨立彈性 ${flexStats.extraFlexUsed} · 剩餘 ${flexStats.remaining} 則｜規格內附豁免 ${flexStats.exemptClientComments} 則 · 暗樁 ${flexStats.shillTotal} 則不計入）`;
             }
 
             if (flexBody) {
@@ -3697,207 +3840,545 @@
                     let headers = [];
                     for (let i = 0; i < Math.min(rows.length, 25); i++) {
                         const h = (rows[i] || []).map(trimCalHeader);
-                        if (h.some(col => ['編號', '文章編號', '文編', '項目', '平台', '產品', '內容類型'].includes(col))) {
+                        if (h.some(x => x === '編號' || x === '項目' || x === '平台')) {
                             headerIdx = i;
                             headers = h;
                             break;
                         }
                     }
-                    if (headerIdx < 0) return;
 
-                    const getCell = (row, names) => {
-                        for (const name of names) {
-                            const idx = headers.indexOf(name);
-                            if (idx >= 0 && row[idx] !== undefined && row[idx] !== null) {
-                                return String(row[idx]).trim();
-                            }
-                        }
-                        return '';
-                    };
+                    if (headerIdx === -1) return;
+
+                    const colIdx = (names) => headers.findIndex(h => names.includes(h));
+                    const idxCode = colIdx(['編號', '文章編號']);
+                    const idxMonth = colIdx(['預計上線月', '上線月', '月份']);
+                    const idxItem = colIdx(['項目', '篇名', '主題', '任務']);
+                    const idxAngle = colIdx(['切角', '內容切角', '文章切角']);
+                    const idxPlatform = colIdx(['平台', '發布平台']);
+                    const idxSpec = colIdx(['規格', '客戶規格', '產品規格', '方案規格']);
+                    const idxType = colIdx(['內容類型', '類型', '分類']);
+                    const idxDate = colIdx(['實際上線日', '上線日', '日期']);
+                    const idxPv = colIdx(['瀏覽', '實際瀏覽', 'PV', 'pv']);
+                    const idxLikes = colIdx(['愛心', '實際愛心', '讚數']);
+                    const idxComments = colIdx(['留言', '實際留言', '留言數']);
+                    const idxShares = colIdx(['分享', '轉發', '分享/轉發', '實際分享']);
+                    const idxClientCmt = colIdx(['客戶留言', '客戶保証留言']);
+                    const idxShillCmt = colIdx(['暗樁留言', '暗樁']);
+                    const idxFlexCmt = colIdx(['彈性留言', '彈性留言數']);
+                    const idxUrl = colIdx(['完成連結', '連結', '網址', 'URL']);
+                    const idxBonus = colIdx(['獎金', 'KPI獎金', '核對獎金']);
+
+                    proj.articles = proj.articles || [];
 
                     for (let r = headerIdx + 1; r < rows.length; r++) {
-                        const row = rows[r];
-                        if (!row || !row.some(cell => String(cell ?? '').trim() !== '')) continue;
+                        const row = rows[r] || [];
+                        const itemVal = idxItem >= 0 ? String(row[idxItem] ?? '').trim() : '';
+                        const codeVal = idxCode >= 0 ? String(row[idxCode] ?? '').trim() : '';
+                        if (!itemVal && !codeVal) continue;
 
-                        const code = getCell(row, ['編號', '文章編號', '文編']);
-                        const expectedMonth = getCell(row, ['預計上線月', '上線月', '月份']);
-                        const item = getCell(row, ['項目', '切角', '主題']);
-                        const platform = getCell(row, ['平台', '通路']);
-                        const product = getCell(row, ['產品', '產品名稱', '規格']);
-                        const contentType = getCell(row, ['內容類型', '類型', '文體分類']);
-                        const rawPubDate = getCell(row, ['上線日期', '實際上線日', '預計上線日', '日期']);
-                        const publishDate = normalizeCalendarDate(rawPubDate, date1904);
-                        const clientComments = Number(String(getCell(row, ['客戶留言'])).replace(/,/g, '')) || 0;
-                        const shillComments = Number(String(getCell(row, ['暗樁留言'])).replace(/,/g, '')) || 0;
-                        const flexCommentsUsed = Number(String(getCell(row, ['彈性留言'])).replace(/,/g, '')) || 0;
-                        const shares = Number(String(getCell(row, ['分享', '轉發', '分享數', '實際分享/轉發'])).replace(/,/g, '')) || 0;
+                        const rawDate = idxDate >= 0 ? row[idxDate] : '';
+                        const normDate = normalizeCalendarDate(rawDate, date1904);
+                        const specRaw = idxSpec >= 0 ? String(row[idxSpec] ?? '').trim() : '';
 
-                        if (!code && !item && !platform && !product) continue;
-                        if (code === '編號' && item === '項目') continue;
-
-                        const matchedSpec = autoDetectContractSpecForArticle({
-                            specName: product,
-                            item,
-                            platform,
-                            contentType,
-                            category: contentType
-                        });
-
-                        const newArtObj = {
-                            id: 'art_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                            code: code || `ART-${proj.articles.length + 1}`,
-                            expectedMonth,
-                            item,
-                            angle: getCell(row, ['切角']),
-                            platform,
-                            specId: matchedSpec ? matchedSpec.id : '',
-                            specName: matchedSpec ? matchedSpec.name : product,
+                        const newArt = {
+                            id: 'art_' + Date.now() + '_' + importedCount + '_' + Math.random().toString(36).slice(2, 5),
+                            code: codeVal || `${proj.name.slice(0, 2).toUpperCase()}-${String(proj.articles.length + 1).padStart(2, '0')}`,
+                            expectedMonth: idxMonth >= 0 ? String(row[idxMonth] ?? '').trim() : '',
+                            item: itemVal || specRaw || '未命名文章',
+                            angle: idxAngle >= 0 ? String(row[idxAngle] ?? '').trim() : '',
+                            platform: idxPlatform >= 0 ? String(row[idxPlatform] ?? '').trim() : '',
+                            specId: '',
+                            specName: specRaw,
                             specManualLock: false,
-                            contentType,
-                            category: contentType,
-                            publishDate,
-                            pv: Number(String(getCell(row, ['實際瀏覽(PV)', '實績PV', 'PV'])).replace(/,/g, '')) || 0,
-                            likes: Number(String(getCell(row, ['實際愛心', '實績愛心', '愛心'])).replace(/,/g, '')) || 0,
-                            comments: Number(String(getCell(row, ['實際留言', '實績留言', '留言'])).replace(/,/g, '')) || 0,
-                            shares,
-                            clientComments,
-                            shillComments,
-                            flexCommentsUsed,
-                            completedUrl: getCell(row, ['完成連結', '連結']),
+                            contentType: idxType >= 0 ? String(row[idxType] ?? '').trim() : '',
+                            category: idxType >= 0 ? String(row[idxType] ?? '').trim() : '',
+                            publishDate: normDate,
+                            pv: idxPv >= 0 ? Number(row[idxPv]) || 0 : 0,
+                            likes: idxLikes >= 0 ? Number(row[idxLikes]) || 0 : 0,
+                            comments: idxComments >= 0 ? Number(row[idxComments]) || 0 : 0,
+                            shares: idxShares >= 0 ? Number(row[idxShares]) || 0 : 0,
+                            clientComments: idxClientCmt >= 0 ? Number(row[idxClientCmt]) || 0 : 0,
+                            shillComments: idxShillCmt >= 0 ? Number(row[idxShillCmt]) || 0 : 0,
+                            flexCommentsUsed: idxFlexCmt >= 0 ? Number(row[idxFlexCmt]) || 0 : 0,
+                            completedUrl: idxUrl >= 0 ? String(row[idxUrl] ?? '').trim() : '',
                             kpiRuleKey: 'none',
-                            bonus: 0
+                            bonus: idxBonus >= 0 ? Number(row[idxBonus]) || 0 : 0
                         };
 
-                        const matrixCnt = detectMatrixTargetCount(newArtObj, matchedSpec);
+                        const matchedSpec = autoDetectContractSpecForArticle(newArt);
+                        if (matchedSpec) {
+                            newArt.specId = matchedSpec.id;
+                            if (!newArt.specName) newArt.specName = matchedSpec.name;
+                        }
+                        const matrixCnt = detectMatrixTargetCount(newArt, matchedSpec);
                         if (matrixCnt > 0) {
-                            ensureMatrixSubArticles(newArtObj, matrixCnt);
-                            newArtObj.kpiRuleKey = 'matrix:all';
+                            ensureMatrixSubArticles(newArt, matrixCnt);
                         }
 
-                        proj.articles = proj.articles || [];
-                        proj.articles.push(newArtObj);
+                        proj.articles.push(newArt);
                         importedCount++;
                     }
                 });
 
-                if (importedCount > 0) {
-                    syncProjectArticlesToCalendar();
-                    saveState();
-                    showToast(`成功匯入 ${importedCount} 篇文章（含上線日已自動同步月曆）！`);
-                } else {
-                    showToast('未偵測到有效文章列，請確認 Excel 欄位包含：編號、預計上線月、項目、平台、產品、內容類型');
-                }
+                syncProjectArticlesToCalendar();
+                saveState();
+                showToast(`成功匯入 ${importedCount} 篇文章至「${proj.name}」！`);
             } catch (err) {
-                console.error('Import project articles failed:', err);
-                showToast('匯入失敗，請確認檔案是否為有效的 XLSX 或 CSV 格式');
+                console.error(err);
+                showToast('匯入文章清冊失敗，請確認檔案格式');
+            } finally {
+                e.target.value = '';
             }
-            e.target.value = '';
         }
 
-        async function handleImportCalendarCards(e) {
-            const files = Array.from(e.target.files || []);
-            if (files.length === 0) return;
-            let added = 0;
-            for (const file of files) {
-                try {
-                    const buf = await file.arrayBuffer();
-                    let wb;
-                    if (/\.csv$/i.test(file.name)) {
-                        wb = XLSX.read(await decodeCalFileBuffer(buf), { type: 'string', raw: true });
-                    } else {
-                        wb = XLSX.read(new Uint8Array(buf), { type: 'array', raw: true });
+        function openNewArticleModal() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) { showToast('請先建立或選擇一個專案'); return; }
+
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = `新增單篇文章 — ${proj.name}`;
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">編號 *</label><input id="mArtCode" type="text" placeholder="例如：SC-04" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">預計上線月 (簡寫如 2611)</label><input id="mArtMonth" type="text" placeholder="例如：2611" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div><label class="block font-semibold mb-1">項目 / 篇名主題 *</label><input id="mArtItem" type="text" placeholder="例如：秋季保濕體驗分享" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">切角（手動輸入）</label><input id="mArtAngle" type="text" placeholder="例如：換季敏感肌救急實測" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">平台 *</label><input id="mArtPlatform" type="text" placeholder="例如：Threads / Dcard / FB" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">內容類型</label><input id="mArtType" type="text" placeholder="例如：一般文 / 矩陣 / 指標型 / FB爆文" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1 text-blue-700">對應客戶成效規格</label>
+                        <select id="mArtSpecId" class="w-full border border-blue-200 bg-blue-50/40 rounded-lg px-3 py-2">
+                            ${renderContractSpecSelectOptions('')}
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1 text-blue-700">客戶留言</label><input id="mArtClientCmt" type="number" min="0" value="0" class="w-full border border-blue-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-slate-600">暗樁留言</label><input id="mArtShillCmt" type="number" min="0" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-purple-700">彈性留言(計入)</label><input id="mArtFlexCmt" type="number" min="0" value="0" class="w-full border border-purple-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">實際上線日</label><input id="mArtDate" type="date" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">完成連結 (URL)</label><input id="mArtUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">內部 KPI 規則 (自動算獎金)</label>
+                        <select id="mArtKpiRule" class="w-full border border-slate-200 rounded-lg px-3 py-2">${renderKpiRuleSelectOptions('none')}</select>
+                    </div>
+                </div>
+            `;
+
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '新增文章';
+            btn.onclick = () => {
+                const code = document.getElementById('mArtCode').value.trim();
+                const item = document.getElementById('mArtItem').value.trim();
+                if (!code || !item) { showToast('請輸入編號與項目'); return; }
+                const specId = document.getElementById('mArtSpecId').value;
+                const spec = (appState.contractSpecs || []).find(s => s.id === specId);
+                const newArt = {
+                    id: 'art_' + Date.now(),
+                    code,
+                    expectedMonth: document.getElementById('mArtMonth').value.trim(),
+                    item,
+                    angle: document.getElementById('mArtAngle').value.trim(),
+                    platform: document.getElementById('mArtPlatform').value.trim() || 'Threads',
+                    specId: spec ? spec.id : '',
+                    specName: spec ? spec.name : '',
+                    specManualLock: !!spec,
+                    contentType: document.getElementById('mArtType').value.trim() || '一般文',
+                    category: document.getElementById('mArtType').value.trim() || '一般文',
+                    publishDate: document.getElementById('mArtDate').value,
+                    pv: 0,
+                    likes: 0,
+                    comments: 0,
+                    shares: 0,
+                    clientComments: Number(document.getElementById('mArtClientCmt').value) || 0,
+                    shillComments: Number(document.getElementById('mArtShillCmt').value) || 0,
+                    flexCommentsUsed: Number(document.getElementById('mArtFlexCmt').value) || 0,
+                    completedUrl: document.getElementById('mArtUrl').value.trim(),
+                    kpiRuleKey: document.getElementById('mArtKpiRule').value,
+                    bonus: 0
+                };
+                if (!newArt.specId) {
+                    const matched = autoDetectContractSpecForArticle(newArt);
+                    if (matched) {
+                        newArt.specId = matched.id;
+                        newArt.specName = matched.name;
                     }
-                    const date1904 = !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904);
-                    wb.SheetNames.forEach(sn => {
-                        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '', raw: true });
-                        rows.forEach(r => {
-                            const proj = String(r['專案'] || r['Project'] || '').trim();
-                            const task = String(r['項目'] || r['任務'] || r['Task'] || '').trim();
-                            const date = normalizeCalendarDate(r['日期'] || r['Date'] || '', date1904);
-                            if (proj && task && date) {
-                                appState.calendarCards.push({
-                                    key: 'cc_imp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                                    project: proj,
-                                    type: String(r['類型'] || r['卡片類型'] || '其他事項').trim(),
-                                    task,
-                                    date,
-                                    time: String(r['時間'] || '').trim(),
-                                    id: String(r['編號'] || '').trim(),
-                                    stage: String(r['階段'] || '').trim(),
-                                    note: String(r['說明'] || '').trim(),
-                                    done: String(r['完成核實'] || '').trim() === '是'
-                                });
-                                added++;
-                            }
-                        });
-                    });
-                } catch (err) {
-                    console.error(err);
                 }
-            }
-            if (added > 0) {
+                const matrixCnt = detectMatrixTargetCount(newArt, spec || findMatchedContractSpec(newArt));
+                if (matrixCnt > 0) {
+                    ensureMatrixSubArticles(newArt, matrixCnt);
+                    expandedMatrixGroups.add(newArt.id);
+                    if (newArt.kpiRuleKey === 'none') newArt.kpiRuleKey = 'matrix:all';
+                }
+                proj.articles = proj.articles || [];
+                proj.articles.push(newArt);
+                syncProjectArticlesToCalendar();
                 saveState();
-                showToast(`已匯入 ${added} 張排程卡片`);
-            }
-            e.target.value = '';
+                closeCustomModal();
+                showToast(matrixCnt > 0 ? `已新增文章並自動展開 ${matrixCnt} 篇矩陣子文章` : '已新增單篇文章並同步月曆');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
-        window.handleImportCalendarCards = handleImportCalendarCards;
+
+        function openEditArticleModal(artId) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const art = proj.articles.find(a => a.id === artId);
+            if (!art) return;
+
+            const currentSpecId = art.specId || (findMatchedContractSpec(art)?.id || '');
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = `編輯文章與成效實績 (${art.code})`;
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">編號</label><input id="eArtCode" type="text" value="${escapeHtml(art.code)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">預計上線月 (簡寫如 2611)</label><input id="eArtMonth" type="text" value="${escapeHtml(art.expectedMonth || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div><label class="block font-semibold mb-1">項目</label><input id="eArtItem" type="text" value="${escapeHtml(art.item)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">切角（手動輸入）</label><input id="eArtAngle" type="text" value="${escapeHtml(art.angle || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">平台</label><input id="eArtPlatform" type="text" value="${escapeHtml(art.platform || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">內容類型</label><input id="eArtType" type="text" value="${escapeHtml(art.contentType || art.category || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1 text-blue-700">對應客戶成效規格</label>
+                        <select id="eArtSpecId" class="w-full border border-blue-200 bg-blue-50/40 rounded-lg px-3 py-2">
+                            ${renderContractSpecSelectOptions(currentSpecId)}
+                        </select>
+                    </div>
+                    <div><label class="block font-semibold mb-1">實際上線日</label><input id="eArtDate" type="date" value="${escapeHtml(art.publishDate || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-4 gap-2">
+                        <div><label class="block font-semibold mb-1">實際瀏覽(PV)</label><input id="eArtPv" type="number" value="${art.pv}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實際愛心</label><input id="eArtLikes" type="number" value="${art.likes}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實際留言</label><input id="eArtComments" type="number" value="${art.comments}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                        <div><label class="block font-semibold mb-1">實際分享</label><input id="eArtShares" type="number" value="${Number(art.shares || 0)}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1 text-blue-700">客戶留言</label><input id="eArtClientCmt" type="number" min="0" value="${Number(art.clientComments || 0)}" class="w-full border border-blue-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-slate-600">暗樁留言</label><input id="eArtShillCmt" type="number" min="0" value="${Number(art.shillComments || 0)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-purple-700">彈性留言(計入)</label><input id="eArtFlexCmt" type="number" min="0" value="${Number(art.flexCommentsUsed || 0)}" class="w-full border border-purple-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div><label class="block font-semibold mb-1">完成連結 (URL)</label><input id="eArtUrl" type="url" value="${escapeHtml(art.completedUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold mb-1">對應內部 KPI 規則</label>
+                            <select id="eArtKpiRule" class="w-full border border-slate-200 rounded-lg px-2 py-2">${renderKpiRuleSelectOptions(art.kpiRuleKey || 'none')}</select>
+                        </div>
+                        <div><label class="block font-semibold mb-1">核對獎金 ($)</label><input id="eArtBonus" type="number" value="${art.bonus}" class="w-full border border-slate-200 rounded-lg px-3 py-2 font-bold text-emerald-700"></div>
+                    </div>
+                </div>
+            `;
+
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '儲存更新';
+            btn.onclick = () => {
+                const specId = document.getElementById('eArtSpecId').value;
+                const spec = (appState.contractSpecs || []).find(s => s.id === specId);
+                art.code = document.getElementById('eArtCode').value.trim();
+                art.expectedMonth = document.getElementById('eArtMonth').value.trim();
+                art.item = document.getElementById('eArtItem').value.trim();
+                art.angle = document.getElementById('eArtAngle').value.trim();
+                art.platform = document.getElementById('eArtPlatform').value.trim();
+                art.contentType = document.getElementById('eArtType').value.trim();
+                art.category = art.contentType;
+                art.specManualLock = true;
+                art.specId = spec ? spec.id : '';
+                art.specName = spec ? spec.name : '';
+                art.publishDate = document.getElementById('eArtDate').value;
+                art.pv = Number(document.getElementById('eArtPv').value) || 0;
+                art.likes = Number(document.getElementById('eArtLikes').value) || 0;
+                art.comments = Number(document.getElementById('eArtComments').value) || 0;
+                art.shares = Number(document.getElementById('eArtShares').value) || 0;
+                art.clientComments = Number(document.getElementById('eArtClientCmt').value) || 0;
+                art.shillComments = Number(document.getElementById('eArtShillCmt').value) || 0;
+                art.flexCommentsUsed = Number(document.getElementById('eArtFlexCmt').value) || 0;
+                art.completedUrl = document.getElementById('eArtUrl').value.trim();
+                art.kpiRuleKey = document.getElementById('eArtKpiRule').value;
+                if (art.kpiRuleKey !== 'none') {
+                    art.bonus = computeArticleBonus(art).bonus;
+                } else {
+                    art.bonus = Number(document.getElementById('eArtBonus').value) || 0;
+                }
+                const matrixCnt = detectMatrixTargetCount(art, spec);
+                if (matrixCnt > 0) {
+                    ensureMatrixSubArticles(art, matrixCnt);
+                }
+                syncProjectArticlesToCalendar();
+                saveState();
+                closeCustomModal();
+                showToast('文章實績已更新並同步月曆');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
 
         function deleteProjectArticle(artId) {
             const proj = appState.projects.find(p => p.id === appState.currentProjectId);
             if (!proj) return;
-            proj.articles = (proj.articles || []).filter(a => a.id !== artId);
+            proj.articles = proj.articles.filter(a => a.id !== artId);
             selectedMap.articles.delete(artId);
             syncProjectArticlesToCalendar();
             saveState();
-            showToast('已刪除文章並同步更新月曆');
+            showToast('已刪除文章並同步移除月曆卡片');
         }
 
-        // ==================== 客戶成效規格庫管理 ====================
+        function renderProjectCustomQuotaRows(quotas) {
+            if (!quotas || quotas.length === 0) {
+                return `<div class="text-[11px] text-slate-400 py-1.5 text-center border border-dashed border-slate-200 rounded-lg">尚無自訂其他項目（點擊右上方「+ 新增項目」可自由增加）</div>`;
+            }
+            return quotas.map((q) => `
+                <div class="custom-quota-row grid grid-cols-12 gap-2 items-center bg-slate-50/80 p-2 rounded-lg border border-slate-200/80">
+                    <div class="col-span-5">
+                        <input type="text" data-field="name" value="${escapeHtml(q.name || '')}" placeholder="項目名稱 (如：置入連結)" class="w-full bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs">
+                    </div>
+                    <div class="col-span-6">
+                        <input type="text" data-field="target" value="${escapeHtml(q.target || '')}" placeholder="規格 / 目標數量 (如：10 則)" class="w-full bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs">
+                    </div>
+                    <div class="col-span-1 text-right">
+                        <button type="button" onclick="this.closest('.custom-quota-row').remove()" class="text-rose-500 hover:text-rose-700 font-bold px-1.5 py-1">✕</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addCustomQuotaModalRow() {
+            const list = document.getElementById('mProjCustomQuotasList');
+            if (!list) return;
+            const emptyHint = list.querySelector('.border-dashed');
+            if (emptyHint) emptyHint.remove();
+            const row = document.createElement('div');
+            row.className = 'custom-quota-row grid grid-cols-12 gap-2 items-center bg-slate-50/80 p-2 rounded-lg border border-slate-200/80';
+            row.innerHTML = `
+                <div class="col-span-5">
+                    <input type="text" data-field="name" placeholder="項目名稱 (如：置入連結)" class="w-full bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs">
+                </div>
+                <div class="col-span-6">
+                    <input type="text" data-field="target" placeholder="規格 / 目標數量 (如：10 則)" class="w-full bg-white border border-slate-200 rounded-md px-2.5 py-1.5 text-xs">
+                </div>
+                <div class="col-span-1 text-right">
+                    <button type="button" onclick="this.closest('.custom-quota-row').remove()" class="text-rose-500 hover:text-rose-700 font-bold px-1.5 py-1">✕</button>
+                </div>
+            `;
+            list.appendChild(row);
+        }
+
+        function collectCustomQuotasFromModal() {
+            const rows = document.querySelectorAll('#mProjCustomQuotasList .custom-quota-row');
+            const result = [];
+            rows.forEach((row, idx) => {
+                const name = row.querySelector('input[data-field="name"]')?.value.trim() || '';
+                const target = row.querySelector('input[data-field="target"]')?.value.trim() || '';
+                if (name || target) {
+                    result.push({ id: 'cq_' + Date.now() + '_' + idx, name: name || '其他項目', target });
+                }
+            });
+            return result;
+        }
+
+        function openNewProjectModal() {
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '建立新專案與快速連結';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="mProjName" type="text" placeholder="例如：春季新品口碑專案" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">合約總篇數</label><input id="mProjArticles" type="number" value="10" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-purple-700">購買彈性留言總則數</label><input id="mProjFlexComments" type="number" min="0" value="0" class="w-full border border-purple-200 bg-purple-50/30 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-rose-700">❤️ 愛心總額度</label><input id="mProjLikesQuota" type="number" min="0" value="0" class="w-full border border-rose-200 bg-rose-50/30 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="pt-1 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-semibold text-slate-700">📋 其他自訂項目 / 額度設定</span>
+                            <button type="button" onclick="addCustomQuotaModalRow()" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium">+ 新增項目</button>
+                        </div>
+                        <div id="mProjCustomQuotasList" class="space-y-2">${renderProjectCustomQuotaRows([])}</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+                        <div><label class="block font-semibold mb-1">客戶需求表連結</label><input id="mProjReqUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">議程表連結</label><input id="mProjAgendaUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">CUE 表連結</label><input id="mProjCueUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">PMS 連結</label><input id="mProjPmsUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '建立專案';
+            btn.onclick = () => {
+                const name = document.getElementById('mProjName').value.trim();
+                if (!name) { showToast('請輸入專案名稱'); return; }
+                const newId = 'proj_' + Date.now();
+                // 若先前曾刪除過同名預設專案，建立新專案時將其移出黑名單
+                appState.deletedDefaultProjects = (appState.deletedDefaultProjects || []).filter(n => n !== name);
+                appState.projects.push({
+                    id: newId,
+                    name,
+                    targetArticles: Number(document.getElementById('mProjArticles').value) || 10,
+                    targetFlexComments: Number(document.getElementById('mProjFlexComments').value) || 0,
+                    targetLikesQuota: Number(document.getElementById('mProjLikesQuota').value) || 0,
+                    customQuotas: collectCustomQuotasFromModal(),
+                    dueDate: '2026-12-31',
+                    reqUrl: document.getElementById('mProjReqUrl').value.trim(),
+                    agendaUrl: document.getElementById('mProjAgendaUrl').value.trim(),
+                    cueUrl: document.getElementById('mProjCueUrl').value.trim(),
+                    pmsUrl: document.getElementById('mProjPmsUrl').value.trim(),
+                    extraLinks: [],
+                    articles: [],
+                    flexCommentLogs: [],
+                    likeUsageLogs: [],
+                    projectNotes: []
+                });
+                appState.currentProjectId = newId;
+                saveState();
+                closeCustomModal();
+                showToast(`已成功建立新專案「${name}」`);
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function openEditProjectModal(targetProjId = null) {
+            const proj = appState.projects.find(p => p.id === (targetProjId || appState.currentProjectId));
+            if (!proj) return;
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = `編輯專案設定 — ${proj.name}`;
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="eProjName" type="text" value="${escapeHtml(proj.name)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div><label class="block font-semibold mb-1">合約總篇數</label><input id="eProjArticles" type="number" value="${proj.targetArticles || 10}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-purple-700">購買彈性留言總則數</label><input id="eProjFlexComments" type="number" min="0" value="${proj.targetFlexComments || 0}" class="w-full border border-purple-200 bg-purple-50/30 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1 text-rose-700">❤️ 愛心總額度</label><input id="eProjLikesQuota" type="number" min="0" value="${proj.targetLikesQuota || 0}" class="w-full border border-rose-200 bg-rose-50/30 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="pt-1 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-semibold text-slate-700">📋 其他自訂項目 / 額度設定</span>
+                            <button type="button" onclick="addCustomQuotaModalRow()" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium">+ 新增項目</button>
+                        </div>
+                        <div id="mProjCustomQuotasList" class="space-y-2">${renderProjectCustomQuotaRows(proj.customQuotas || [])}</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+                        <div><label class="block font-semibold mb-1">客戶需求表連結</label><input id="eProjReqUrl" type="url" value="${escapeHtml(proj.reqUrl || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">議程表連結</label><input id="eProjAgendaUrl" type="url" value="${escapeHtml(proj.agendaUrl || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">CUE 表連結</label><input id="eProjCueUrl" type="url" value="${escapeHtml(proj.cueUrl || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">PMS 連結</label><input id="eProjPmsUrl" type="url" value="${escapeHtml(proj.pmsUrl || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '儲存專案設定';
+            btn.onclick = () => {
+                const name = document.getElementById('eProjName').value.trim();
+                if (!name) { showToast('專案名稱不可為空'); return; }
+                proj.name = name;
+                proj.targetArticles = Number(document.getElementById('eProjArticles').value) || 10;
+                proj.targetFlexComments = Number(document.getElementById('eProjFlexComments').value) || 0;
+                proj.targetLikesQuota = Number(document.getElementById('eProjLikesQuota').value) || 0;
+                proj.customQuotas = collectCustomQuotasFromModal();
+                proj.reqUrl = document.getElementById('eProjReqUrl').value.trim();
+                proj.agendaUrl = document.getElementById('eProjAgendaUrl').value.trim();
+                proj.cueUrl = document.getElementById('eProjCueUrl').value.trim();
+                proj.pmsUrl = document.getElementById('eProjPmsUrl').value.trim();
+                saveState();
+                closeCustomModal();
+                showToast('專案設定已更新');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function openAddProjectLinkModal() {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj) return;
+            const modal = document.getElementById('customModalBackdrop');
+            document.getElementById('customModalTitle').textContent = '新增專案快速連結';
+            document.getElementById('customModalBody').innerHTML = `
+                <div class="space-y-3">
+                    <div><label class="block font-semibold mb-1">連結名稱 *</label><input id="mLinkLabel" type="text" placeholder="例如：素材雲端資料夾" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">網址 (URL) *</label><input id="mLinkUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                </div>
+            `;
+            const btn = document.getElementById('customModalConfirmBtn');
+            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
+            btn.textContent = '新增連結';
+            btn.onclick = () => {
+                const label = document.getElementById('mLinkLabel').value.trim();
+                const url = document.getElementById('mLinkUrl').value.trim();
+                if (!label || !url) { showToast('請輸入名稱與網址'); return; }
+                proj.extraLinks = proj.extraLinks || [];
+                proj.extraLinks.push({ label, url });
+                saveState();
+                closeCustomModal();
+                showToast('已新增快速連結');
+            };
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function removeProjectExtraLink(idx) {
+            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
+            if (!proj || !proj.extraLinks) return;
+            proj.extraLinks.splice(idx, 1);
+            saveState();
+            showToast('已移除快速連結');
+        }
+
+        // ==================== 客戶成效規格庫 ====================
         function renderContractSpecsTable() {
             const tbody = document.getElementById('contractSpecsTableBody');
             if (!tbody) return;
             const specs = appState.contractSpecs || [];
-            tbody.innerHTML = specs.map(s => {
-                const cmtNum = Number(s.comments || 0);
-                const cmtNote = cmtNum === 5
-                    ? `<span class="font-mono text-slate-700 font-bold">5</span> <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">核對暗樁留言</span>`
-                    : `<span class="font-mono text-blue-700 font-bold">${cmtNum.toLocaleString()}</span> <span class="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">核對客戶留言</span>`;
+            tbody.innerHTML = specs.map((s) => {
+                const cmtBadge = Number(s.comments || 0) === 5
+                    ? `<span class="font-bold text-slate-700">${s.comments}</span> <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">暗樁留</span>`
+                    : `<span class="font-bold text-blue-700">${s.comments}</span> <span class="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">客戶留</span>`;
                 return `
-                <tr class="hover:bg-slate-50 ${selectedMap.contractSpecs.has(s.id) ? 'bg-rose-50/40' : ''}">
-                    <td class="py-3 px-4"><input type="checkbox" ${selectedMap.contractSpecs.has(s.id) ? 'checked' : ''} onchange="toggleSelectItem('contractSpecs', '${s.id}', this.checked)" class="rounded text-rose-600"></td>
-                    <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(s.name)}</td>
-                    <td class="py-3 px-4 font-mono text-blue-700">${Number(s.likes || 0).toLocaleString()}</td>
-                    <td class="py-3 px-4">${cmtNote}</td>
-                    <td class="py-3 px-4 font-mono text-blue-700">${Number(s.pv || 0).toLocaleString()}</td>
-                    <td class="py-3 px-4 text-slate-600">${escapeHtml(s.quote || '-')}</td>
-                    <td class="py-3 px-4 text-slate-600">${escapeHtml(s.content || '-')}</td>
-                    <td class="py-3 px-4 text-right space-x-2 whitespace-nowrap">
-                        <button onclick="openEditContractSpecModal('${s.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
-                        <button onclick="openConfirmModal('確定要刪除產品規格「${escapeHtml(s.name).replace(/'/g, "\\'")}」嗎？', () => { appState.contractSpecs = appState.contractSpecs.filter(x => x.id !== '${s.id}'); selectedMap.contractSpecs.delete('${s.id}'); saveState(); showToast('已刪除產品規格'); })" class="text-rose-600 hover:underline">刪除</button>
-                    </td>
-                </tr>
-            `}).join('') || '<tr><td colspan="8" class="text-center py-8 text-slate-400">尚無客戶產品規格資料，可點擊右上角「手動新增產品規格」或「匯入產品總表」</td></tr>';
+                    <tr class="hover:bg-slate-50 ${selectedMap.contractSpecs.has(s.id) ? 'bg-rose-50/40' : ''}">
+                        <td class="py-3 px-4"><input type="checkbox" ${selectedMap.contractSpecs.has(s.id) ? 'checked' : ''} onchange="toggleSelectItem('contractSpecs', '${s.id}', this.checked)" class="rounded text-rose-600"></td>
+                        <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(s.name)}</td>
+                        <td class="py-3 px-4 font-semibold text-rose-600">${s.likes}</td>
+                        <td class="py-3 px-4">${cmtBadge}</td>
+                        <td class="py-3 px-4 font-semibold text-emerald-700">${Number(s.pv).toLocaleString()}</td>
+                        <td class="py-3 px-4 text-slate-600">${escapeHtml(s.quote)}</td>
+                        <td class="py-3 px-4 text-slate-500">${escapeHtml(s.content)}</td>
+                        <td class="py-3 px-4 text-right space-x-2">
+                            <button onclick="openNewContractSpecModal('${s.id}')" class="text-blue-700 hover:underline font-medium">編輯</button>
+                            <button onclick="openConfirmModal('確定要刪除此產品規格嗎？', () => deleteSingleContractSpec('${s.id}'))" class="text-rose-600 hover:underline font-medium">刪除</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('') || `<tr><td colspan="8" class="text-center py-8 text-slate-400">尚無客戶成效規格，請匯入產品總表或點擊新增</td></tr>`;
         }
 
-        function openNewContractSpecModal() {
-            openEditContractSpecModal(null);
-        }
-
-        function openEditContractSpecModal(specId) {
-            const existing = specId ? (appState.contractSpecs || []).find(s => s.id === specId) : null;
+        function openNewContractSpecModal(editId = '') {
+            const existing = editId ? (appState.contractSpecs || []).find(s => s.id === editId) : null;
             const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = existing ? `編輯產品規格 — ${existing.name}` : '手動新增客戶產品規格';
+            document.getElementById('customModalTitle').textContent = existing ? '編輯客戶產品成效規格' : '新增客戶產品成效規格';
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div><label class="block font-semibold mb-1">產品 / 規格名稱 *</label><input id="mSpecName" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="例如：Threads口碑文 / 核心產品 A" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">產品 / 規格名稱 *</label><input id="mSpecName" type="text" value="${escapeHtml(existing?.name || '')}" placeholder="例如：Threads口碑文 / 標準規格 A" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     <div class="grid grid-cols-3 gap-2">
-                        <div><label class="block font-semibold mb-1">愛心門檻</label><input id="mSpecLikes" type="number" min="0" value="${existing?.likes ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">留言門檻 (5則=暗樁)</label><input id="mSpecComments" type="number" min="0" value="${existing?.comments ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">PV數門檻</label><input id="mSpecPv" type="number" min="0" value="${existing?.pv ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">愛心門檻</label><input id="mSpecLikes" type="number" value="${existing?.likes ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">留言門檻 (設5=暗樁)</label><input id="mSpecComments" type="number" value="${existing?.comments ?? 5}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">PV 數門檻</label><input id="mSpecPv" type="number" value="${existing?.pv ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     </div>
-                    <div><label class="block font-semibold mb-1">引用要求</label><input id="mSpecQuote" type="text" value="${escapeHtml(existing?.quote || '')}" placeholder="例如：需帶官網連結" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div><label class="block font-semibold mb-1">內容規格備註</label><input id="mSpecContent" type="text" value="${escapeHtml(existing?.content || '')}" placeholder="例如：開箱實測＋對比圖" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">引用要求</label><input id="mSpecQuote" type="text" value="${escapeHtml(existing?.quote || '')}" placeholder="例如：暗樁基礎互動 5 則 / 需帶官網連結" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">內容規格備註</label><input id="mSpecContent" type="text" value="${escapeHtml(existing?.content || '')}" placeholder="例如：字數 300 字以上 + 圖片" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                 </div>
             `;
             const btn = document.getElementById('customModalConfirmBtn');
@@ -3906,8 +4387,8 @@
             btn.onclick = () => {
                 const name = document.getElementById('mSpecName').value.trim();
                 if (!name) { showToast('請輸入產品名稱'); return; }
-                const specData = {
-                    id: existing?.id || ('spec_' + Date.now()),
+                const obj = {
+                    id: existing ? existing.id : ('spec_' + Date.now()),
                     name,
                     likes: Number(document.getElementById('mSpecLikes').value) || 0,
                     comments: Number(document.getElementById('mSpecComments').value) || 0,
@@ -3916,16 +4397,35 @@
                     content: document.getElementById('mSpecContent').value.trim()
                 };
                 appState.contractSpecs = appState.contractSpecs || [];
-                if (existing) Object.assign(existing, specData);
-                else appState.contractSpecs.push(specData);
+                if (existing) {
+                    const idx = appState.contractSpecs.findIndex(s => s.id === existing.id);
+                    if (idx >= 0) appState.contractSpecs[idx] = obj;
+                } else {
+                    appState.contractSpecs.push(obj);
+                }
                 saveState();
                 closeCustomModal();
-                showToast(existing ? '已更新產品規格' : '已新增產品規格');
+                showToast(existing ? '已更新客戶產品規格' : '已新增客戶產品規格');
             };
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
 
+        function deleteSingleContractSpec(id) {
+            appState.contractSpecs = (appState.contractSpecs || []).filter(s => s.id !== id);
+            selectedMap.contractSpecs.delete(id);
+            saveState();
+            showToast('已刪除該產品規格');
+        }
+
+        function deleteAllContractSpecs() {
+            appState.contractSpecs = [];
+            selectedMap.contractSpecs.clear();
+            saveState();
+            showToast('已清空全部客戶產品規格');
+        }
+
+        // ==================== 匯入產品總表 (XLSX/CSV) ====================
         async function handleImportProductMasterTable(e) {
             const file = e.target.files?.[0];
             if (!file) return;
@@ -3939,679 +4439,423 @@
                     wb = XLSX.read(new Uint8Array(buf), { type: 'array', raw: true });
                 }
 
-                let added = 0;
-                wb.SheetNames.forEach(sn => {
-                    const sheet = wb.Sheets[sn];
+                let addedCount = 0;
+                appState.contractSpecs = appState.contractSpecs || [];
+
+                wb.SheetNames.forEach(sheetName => {
+                    const sheet = wb.Sheets[sheetName];
                     if (!sheet) return;
                     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+                    if (!rows || rows.length === 0) return;
+
                     let headerIdx = -1;
                     let headers = [];
                     for (let i = 0; i < Math.min(rows.length, 20); i++) {
                         const h = (rows[i] || []).map(trimCalHeader);
-                        if (h.some(col => ['產品名稱', '產品', '規格名稱'].includes(col))) {
+                        if (h.some(x => x.includes('產品') || x.includes('規格') || x.includes('項目') || x.includes('名稱'))) {
                             headerIdx = i;
                             headers = h;
                             break;
                         }
                     }
-                    if (headerIdx < 0) return;
 
-                    const getCell = (row, names) => {
-                        for (const name of names) {
-                            const idx = headers.indexOf(name);
-                            if (idx >= 0 && row[idx] !== undefined && row[idx] !== null) {
-                                return String(row[idx]).trim();
-                            }
-                        }
-                        return '';
-                    };
+                    if (headerIdx === -1) return;
+
+                    const colIdx = (kws) => headers.findIndex(h => kws.some(k => h.includes(k)));
+                    const idxName = colIdx(['產品', '規格名稱', '項目', '方案', '名稱']);
+                    const idxLikes = colIdx(['愛心', '讚']);
+                    const idxComments = colIdx(['留言']);
+                    const idxPv = colIdx(['PV', 'pv', '瀏覽', '曝光']);
+                    const idxQuote = colIdx(['引用', '連結要求']);
+                    const idxContent = colIdx(['備註', '內容', '說明', '規範']);
 
                     for (let r = headerIdx + 1; r < rows.length; r++) {
-                        const row = rows[r];
-                        if (!row || !row.some(cell => String(cell ?? '').trim() !== '')) continue;
-                        const name = getCell(row, ['產品名稱', '產品', '規格名稱']);
-                        if (!name || name === '產品名稱') continue;
+                        const row = rows[r] || [];
+                        const nameVal = idxName >= 0 ? String(row[idxName] ?? '').trim() : '';
+                        if (!nameVal) continue;
 
-                        appState.contractSpecs = appState.contractSpecs || [];
-                        appState.contractSpecs.push({
-                            id: 'spec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                            name,
-                            likes: Number(String(getCell(row, ['愛心', '愛心數'])).replace(/,/g, '')) || 0,
-                            comments: Number(String(getCell(row, ['留言', '留言數'])).replace(/,/g, '')) || 0,
-                            pv: Number(String(getCell(row, ['PV數', 'PV', '觀看數'])).replace(/,/g, '')) || 0,
-                            quote: getCell(row, ['引用']),
-                            content: getCell(row, ['內容', '備註'])
-                        });
-                        added++;
+                        const specObj = {
+                            id: 'spec_' + Date.now() + '_' + addedCount + '_' + Math.random().toString(36).slice(2, 5),
+                            name: nameVal,
+                            likes: idxLikes >= 0 ? Number(row[idxLikes]) || 0 : 0,
+                            comments: idxComments >= 0 ? Number(row[idxComments]) || 0 : 0,
+                            pv: idxPv >= 0 ? Number(row[idxPv]) || 0 : 0,
+                            quote: idxQuote >= 0 ? String(row[idxQuote] ?? '').trim() : '',
+                            content: idxContent >= 0 ? String(row[idxContent] ?? '').trim() : ''
+                        };
+
+                        const existIdx = appState.contractSpecs.findIndex(s => s.name === nameVal);
+                        if (existIdx >= 0) {
+                            appState.contractSpecs[existIdx] = { ...appState.contractSpecs[existIdx], ...specObj, id: appState.contractSpecs[existIdx].id };
+                        } else {
+                            appState.contractSpecs.push(specObj);
+                        }
+                        addedCount++;
                     }
                 });
 
-                if (added > 0) {
-                    saveState();
-                    showToast(`成功匯入 ${added} 筆產品規格！`);
-                } else {
-                    showToast('未偵測到產品規格列，請確認欄位包含「產品名稱」');
-                }
+                saveState();
+                showToast(`成功匯入 ${addedCount} 筆產品成效規格！`);
             } catch (err) {
-                console.error('Import product specs failed:', err);
-                showToast('匯入失敗，請確認檔案格式');
+                console.error(err);
+                showToast('匯入產品總表失敗，請確認檔案格式');
+            } finally {
+                e.target.value = '';
             }
-            e.target.value = '';
         }
 
-        function deleteAllContractSpecs() {
-            appState.contractSpecs = [];
-            selectedMap.contractSpecs.clear();
-            saveState();
-            showToast('已刪除全部產品規格');
-        }
+        // ==================== 匯入排程卡片總表 (XLSX/CSV) ====================
+        async function handleImportCalendarCards(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            const statusEl = document.getElementById('calImportStatus');
+            let totalImported = 0;
 
-        // ==================== 派案寫手與廠商、熱門文章 ====================
-        function toggleWriterDone(writerId) {
-            const w = (appState.writers || []).find(x => x.id === writerId);
-            if (!w) return;
-            w.done = !w.done;
-            if (w.calCardKey) {
-                const card = (appState.calendarCards || []).find(c => c.key === w.calCardKey);
-                if (card) card.done = w.done;
+            try {
+                for (const file of files) {
+                    const buf = await file.arrayBuffer();
+                    let wb;
+                    if (/\.csv$/i.test(file.name)) {
+                        const csvText = await decodeCalFileBuffer(buf);
+                        wb = XLSX.read(csvText, { type: 'string', raw: true });
+                    } else {
+                        wb = XLSX.read(new Uint8Array(buf), { type: 'array', raw: true });
+                    }
+                    const date1904 = !!(wb.Workbook && wb.Workbook.WBProps && wb.Workbook.WBProps.date1904);
+
+                    wb.SheetNames.forEach(sheetName => {
+                        const sheet = wb.Sheets[sheetName];
+                        if (!sheet) return;
+                        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+                        if (!rows || rows.length === 0) return;
+
+                        let headerIdx = -1;
+                        let headers = [];
+                        for (let i = 0; i < Math.min(rows.length, 20); i++) {
+                            const h = (rows[i] || []).map(trimCalHeader);
+                            if (h.some(x => x.includes('專案') || x.includes('任務') || x.includes('項目') || x.includes('日期'))) {
+                                headerIdx = i;
+                                headers = h;
+                                break;
+                            }
+                        }
+                        if (headerIdx === -1) return;
+
+                        const colIdx = (kws) => headers.findIndex(h => kws.some(k => h.includes(k)));
+                        const idxProj = colIdx(['專案']);
+                        const idxType = colIdx(['類型', '分類']);
+                        const idxTask = colIdx(['任務', '項目', '標題']);
+                        const idxDate = colIdx(['日期', '時間']);
+                        const idxTime = colIdx(['時段', '時間']);
+                        const idxId = colIdx(['編號']);
+                        const idxCue = colIdx(['CUE', 'cue']);
+                        const idxStage = colIdx(['階段']);
+                        const idxNote = colIdx(['說明', '備註']);
+                        const idxDone = colIdx(['完成', '核實']);
+
+                        appState.calendarCards = appState.calendarCards || [];
+
+                        for (let r = headerIdx + 1; r < rows.length; r++) {
+                            const row = rows[r] || [];
+                            const taskVal = idxTask >= 0 ? String(row[idxTask] ?? '').trim() : '';
+                            const dateVal = idxDate >= 0 ? normalizeCalendarDate(row[idxDate], date1904) : '';
+                            if (!taskVal || !dateVal) continue;
+
+                            const projVal = (idxProj >= 0 ? String(row[idxProj] ?? '').trim() : '') || sheetName || '未分類專案';
+                            const doneRaw = idxDone >= 0 ? String(row[idxDone] ?? '').trim() : '';
+
+                            appState.calendarCards.push({
+                                key: 'cc_imp_' + Date.now() + '_' + totalImported + '_' + Math.random().toString(36).slice(2, 5),
+                                project: projVal,
+                                type: (idxType >= 0 ? String(row[idxType] ?? '').trim() : '') || '匯入排程',
+                                task: taskVal,
+                                date: dateVal,
+                                time: idxTime >= 0 && idxTime !== idxDate ? String(row[idxTime] ?? '').trim() : '',
+                                id: idxId >= 0 ? String(row[idxId] ?? '').trim() : '',
+                                cue: idxCue >= 0 ? String(row[idxCue] ?? '').trim() : '',
+                                stage: idxStage >= 0 ? String(row[idxStage] ?? '').trim() : '',
+                                note: idxNote >= 0 ? String(row[idxNote] ?? '').trim() : '',
+                                change: `匯入自 ${file.name}`,
+                                done: ['是', 'true', '1', '完成', '✓', 'Y', 'y'].includes(doneRaw)
+                            });
+                            totalImported++;
+                        }
+                    });
+                }
+
+                saveState();
+                if (statusEl) {
+                    statusEl.classList.remove('hidden');
+                    statusEl.textContent = `✅ 已成功從 ${files.length} 個檔案匯入共 ${totalImported} 張排程卡片！`;
+                }
+                showToast(`已成功匯入 ${totalImported} 張排程卡片`);
+            } catch (err) {
+                console.error(err);
+                showToast('匯入排程卡片失敗，請確認檔案格式');
+            } finally {
+                e.target.value = '';
             }
-            saveState();
         }
 
-        function deleteSingleWriter(writerId) {
-            const w = (appState.writers || []).find(x => x.id === writerId);
-            if (w && w.calCardKey) {
-                appState.calendarCards = (appState.calendarCards || []).filter(c => c.key !== w.calCardKey);
-            }
-            appState.writers = (appState.writers || []).filter(x => x.id !== writerId);
-            selectedMap.writers.delete(writerId);
-            saveState();
-            showToast('已刪除派稿紀錄並同步移除月曆卡片');
-        }
-
+        // ==================== 派案寫手 / 帳號廠商 / 熱門文章 ====================
         function renderVendorsWriters() {
-            const wEl = document.getElementById('writersListContainer');
-            const vEl = document.getElementById('vendorsListContainer');
-            wEl.innerHTML = (appState.writers || []).map((w, idx) => {
-                if (!w.id) w.id = 'wr_' + idx + '_' + (w.writer || '');
-                const monthTag = w.month ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium">${escapeHtml(w.month)}</span>` : '';
-                const workTypeTag = w.workType ? `<span class="px-1.5 py-0.5 rounded ${w.workType === '企劃' ? 'bg-indigo-50 text-indigo-700' : 'bg-sky-50 text-sky-700'} text-[11px] font-semibold">${escapeHtml(w.workType)}</span>` : '';
-                return `
-                <div class="p-3 rounded-xl border border-slate-100 flex justify-between items-center gap-2 hover:bg-slate-50">
-                    <div class="flex items-center gap-2.5 flex-1 min-w-0">
-                        <input type="checkbox" title="選取刪除" ${selectedMap.writers.has(w.id) ? 'checked' : ''} onchange="toggleSelectItem('writers', '${w.id}', this.checked)" class="rounded text-rose-600 shrink-0">
-                        <div class="min-w-0 flex-1 space-y-1">
-                            <div class="flex flex-wrap items-center gap-1.5">
-                                <span class="font-bold text-slate-900">${escapeHtml(w.project)}</span>
-                                <span class="text-slate-400">·</span>
-                                <span class="font-semibold text-blue-700">${escapeHtml(w.writer)}</span>
-                                ${monthTag}
-                                ${workTypeTag}
+            const wContainer = document.getElementById('writersListContainer');
+            if (wContainer) {
+                const writers = appState.writers || [];
+                wContainer.innerHTML = writers.map(w => `
+                    <div class="p-3 rounded-xl border border-slate-100 hover:bg-slate-50 flex items-center justify-between gap-2">
+                        <label class="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" ${selectedMap.writers.has(w.id) ? 'checked' : ''} onchange="toggleSelectItem('writers', '${w.id}', this.checked)" class="rounded text-rose-600 mt-0.5">
+                            <div class="min-w-0">
+                                <div class="font-bold text-slate-900 truncate">${escapeHtml(w.writerName)} · <span class="text-blue-700">${escapeHtml(w.project)}</span></div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(w.topic)} · 回稿日：<strong>${escapeHtml(w.dueDate || '未指定')}</strong></div>
                             </div>
-                            <div class="text-[11px] text-slate-500 flex items-center gap-2">
-                                <span>回稿日期：${escapeHtml(w.due || '未設定')}</span>
-                                ${w.calCardKey ? '<span class="text-emerald-600 inline-flex items-center gap-0.5">📅 已同步月曆</span>' : ''}
+                        </label>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button onclick="toggleWriterDone('${w.id}')" class="px-2 py-0.5 rounded text-[11px] font-semibold ${w.done ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${w.done ? '✓ 已回稿' : '進行中'}</button>
+                            <button onclick="deleteSingleWriter('${w.id}')" class="text-rose-600 hover:underline text-xs">刪除</button>
+                        </div>
+                    </div>
+                `).join('') || '<div class="text-center py-6 text-slate-400">尚無派案寫手紀錄</div>';
+            }
+
+            const vContainer = document.getElementById('vendorsListContainer');
+            if (vContainer) {
+                const vendors = appState.vendors || [];
+                vContainer.innerHTML = vendors.map(v => `
+                    <div class="p-3 rounded-xl border border-slate-100 hover:bg-slate-50 flex items-center justify-between gap-2">
+                        <label class="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" ${selectedMap.vendors.has(v.id) ? 'checked' : ''} onchange="toggleSelectItem('vendors', '${v.id}', this.checked)" class="rounded text-rose-600 mt-0.5">
+                            <div class="min-w-0">
+                                <div class="font-bold text-slate-900 truncate">${escapeHtml(v.vendorName)} · <span class="text-indigo-700">${escapeHtml(v.project)}</span></div>
+                                <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(v.item)} · 預計上線：<strong>${escapeHtml(v.launchDate || '未指定')}</strong></div>
                             </div>
+                        </label>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button onclick="toggleVendorDone('${v.id}')" class="px-2 py-0.5 rounded text-[11px] font-semibold ${v.done ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}">${v.done ? '✓ 已上線' : '待上線'}</button>
+                            <button onclick="deleteSingleVendor('${v.id}')" class="text-rose-600 hover:underline text-xs">刪除</button>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <button onclick="toggleWriterDone('${w.id}')" class="px-2 py-0.5 rounded text-[11px] font-medium transition ${w.done ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}">${w.done ? '✓ 已回稿核實' : '⏳ 待回稿'}</button>
-                        <button onclick="openConfirmModal('確定要刪除此派稿紀錄（並同步移除行事曆卡片）嗎？', () => deleteSingleWriter('${w.id}'))" class="text-rose-600 hover:underline text-[11px]">刪除</button>
-                    </div>
-                </div>
-            `}).join('') || '<div class="text-center py-6 text-slate-400">尚無寫手派稿紀錄，點擊右上角「+ 新增派稿」即可同步建立行事曆排程</div>';
-
-            vEl.innerHTML = (appState.vendors || []).map((v, idx) => {
-                if (!v.id) v.id = 'vd_' + idx + '_' + (v.orderId || '');
-                return `
-                <div class="p-3 rounded-xl border border-slate-100 flex justify-between items-center gap-2 hover:bg-slate-50">
-                    <label class="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
-                        <input type="checkbox" ${selectedMap.vendors.has(v.id) ? 'checked' : ''} onchange="toggleSelectItem('vendors', '${v.id}', this.checked)" class="rounded text-rose-600">
-                        <div class="truncate"><span class="font-bold text-slate-800">${escapeHtml(v.project)}</span> · ${escapeHtml(v.code)} (單號：${escapeHtml(v.orderId)}) <span class="text-slate-400">上線：${escapeHtml(v.date)}</span></div>
-                    </label>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <span class="px-2 py-0.5 rounded text-[11px] ${v.confirmed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${v.confirmed ? '已確認上線' : '未確認'}</span>
-                        <button onclick="openConfirmModal('確定要刪除嗎？', () => { appState.vendors = appState.vendors.filter(x => x.id !== '${v.id}'); selectedMap.vendors.delete('${v.id}'); saveState(); showToast('已刪除'); })" class="text-rose-600 hover:underline text-[11px]">刪除</button>
-                    </div>
-                </div>
-            `}).join('') || '<div class="text-center py-6 text-slate-400">尚無帳號廠商發包紀錄</div>';
-        }
-
-        function renderHotArticles() {
-            const hEl = document.getElementById('hotArticlesListContainer');
-            hEl.innerHTML = (appState.hotArticles || []).map((h, idx) => {
-                if (!h.id) h.id = 'ha_' + idx + '_' + (h.title || '').slice(0, 8);
-                return `
-                <div class="p-3 rounded-xl border border-slate-100 flex justify-between items-center gap-2 hover:bg-slate-50">
-                    <label class="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
-                        <input type="checkbox" ${selectedMap.hotArticles.has(h.id) ? 'checked' : ''} onchange="toggleSelectItem('hotArticles', '${h.id}', this.checked)" class="rounded text-rose-600">
-                        <div class="truncate"><span class="font-bold text-slate-800">${escapeHtml(h.project)}</span> · <a href="${escapeHtml(h.url)}" target="_blank" class="text-blue-700 underline">${escapeHtml(h.title)}</a></div>
-                    </label>
-                    <div class="flex items-center gap-3 shrink-0">
-                        <span class="text-slate-500">週三審核：${escapeHtml(h.wedStatus)} / 週五上線：${escapeHtml(h.friStatus)}</span>
-                        <button onclick="openConfirmModal('確定要刪除嗎？', () => { appState.hotArticles = appState.hotArticles.filter(x => x.id !== '${h.id}'); selectedMap.hotArticles.delete('${h.id}'); saveState(); showToast('已刪除'); })" class="text-rose-600 hover:underline text-[11px]">刪除</button>
-                    </div>
-                </div>
-            `}).join('') || '<div class="text-center py-6 text-slate-400">尚無熱門文章搜尋紀錄</div>';
-        }
-
-        // ==================== 新增與編輯專案 ====================
-        function openNewProjectModal() {
-            openProjectFormModal(null);
-        }
-
-        function openEditProjectModal(projId = null) {
-            const targetId = projId || appState.currentProjectId;
-            const proj = appState.projects.find(p => p.id === targetId);
-            if (!proj) { showToast('請先選擇專案'); return; }
-            openProjectFormModal(proj);
-        }
-
-        function openProjectFormModal(existingProj) {
-            const isEdit = !!existingProj;
-            const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = isEdit ? `編輯專案設定 — ${existingProj.name}` : '建立新專案';
-
-            const extraLinks = existingProj?.extraLinks || [];
-            const customQuotas = existingProj?.customQuotas || [];
-            document.getElementById('customModalBody').innerHTML = `
-                <div class="space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div class="sm:col-span-2"><label class="block font-semibold mb-1">專案名稱 *</label><input id="mProjName" type="text" value="${escapeHtml(existingProj?.name || '')}" placeholder="例如：2026 Q4 品牌口碑專案" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">結案日期</label><input id="mProjDue" type="date" value="${escapeHtml(existingProj?.dueDate || '2026-12-31')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div><label class="block font-semibold mb-1">📄 合約總篇數</label><input id="mProjArticles" type="number" min="0" value="${existingProj?.targetArticles ?? 10}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1 text-purple-700">💬 總計入留言額度 (則)</label><input id="mProjFlexComments" type="number" min="0" value="${existingProj?.targetFlexComments ?? 0}" class="w-full border border-purple-200 bg-purple-50/30 rounded-lg px-3 py-2 font-semibold text-purple-900"></div>
-                        <div><label class="block font-semibold mb-1 text-rose-700">❤️ 總愛心額度 (顆)</label><input id="mProjLikesQuota" type="number" min="0" value="${existingProj?.targetLikesQuota ?? 0}" class="w-full border border-rose-200 bg-rose-50/30 rounded-lg px-3 py-2 font-semibold text-rose-900"></div>
-                    </div>
-                    <div class="pt-2 border-t border-slate-100 space-y-2">
-                        <div class="flex items-center justify-between">
-                            <label class="font-semibold text-slate-700">📌 手動輸入其他項目 / 額度</label>
-                            <button type="button" onclick="appendNewProjCustomQuotaRow()" class="text-[11px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1 rounded-lg font-medium">+ 新增其他項目</button>
-                        </div>
-                        <div id="mProjCustomQuotasContainer" class="space-y-2">
-                            ${customQuotas.map(q => `
-                                <div class="custom-quota-row flex items-center gap-2">
-                                    <input type="text" value="${escapeHtml(q.name || '')}" placeholder="項目名稱" class="custom-quota-name w-1/2 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                                    <input type="text" value="${escapeHtml(q.target || '')}" placeholder="目標數量/規格" class="custom-quota-target flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                                    <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1.5 font-bold">✕</button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-                        <div><label class="block font-semibold mb-1">📋 客戶需求表連結</label><input id="mProjReq" type="url" value="${escapeHtml(existingProj?.reqUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">🗂️ 議程表連結</label><input id="mProjAgenda" type="url" value="${escapeHtml(existingProj?.agendaUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">📅 CUE表連結</label><input id="mProjCue" type="url" value="${escapeHtml(existingProj?.cueUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">⚙️ PMS連結</label><input id="mProjPms" type="url" value="${escapeHtml(existingProj?.pmsUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div class="pt-2 border-t border-slate-100 space-y-2">
-                        <div class="flex items-center justify-between">
-                            <label class="font-semibold text-slate-700">🔗 其他自訂連結</label>
-                            <button type="button" onclick="appendNewProjLinkRow()" class="text-[11px] bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg font-medium">+ 新增一組連結</button>
-                        </div>
-                        <div id="mProjExtraLinksContainer" class="space-y-2">
-                            ${extraLinks.map(lk => `
-                                <div class="extra-link-row flex items-center gap-2">
-                                    <input type="text" value="${escapeHtml(lk.label || '')}" placeholder="連結名稱" class="extra-link-label w-1/3 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                                    <input type="url" value="${escapeHtml(lk.url || '')}" placeholder="https://..." class="extra-link-url flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                                    <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1.5 font-bold">✕</button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-            const btn = document.getElementById('customModalConfirmBtn');
-            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = isEdit ? '儲存專案設定' : '建立專案';
-            btn.onclick = () => {
-                const name = document.getElementById('mProjName').value.trim();
-                if (!name) { showToast('請輸入專案名稱'); return; }
-
-                const updatedExtraLinks = [];
-                document.querySelectorAll('#mProjExtraLinksContainer .extra-link-row').forEach(row => {
-                    const label = row.querySelector('.extra-link-label')?.value.trim();
-                    const url = row.querySelector('.extra-link-url')?.value.trim();
-                    if (label || url) {
-                        updatedExtraLinks.push({ label: label || '參考連結', url: url || '#' });
-                    }
-                });
-
-                const updatedCustomQuotas = [];
-                document.querySelectorAll('#mProjCustomQuotasContainer .custom-quota-row').forEach(row => {
-                    const qName = row.querySelector('.custom-quota-name')?.value.trim();
-                    const qTarget = row.querySelector('.custom-quota-target')?.value.trim();
-                    if (qName || qTarget) {
-                        updatedCustomQuotas.push({ name: qName || '其他項目', target: qTarget || '-' });
-                    }
-                });
-
-                const targetArticles = Number(document.getElementById('mProjArticles').value) || 0;
-                const targetFlexComments = Number(document.getElementById('mProjFlexComments').value) || 0;
-                const targetLikesQuota = Number(document.getElementById('mProjLikesQuota').value) || 0;
-                const dueDate = document.getElementById('mProjDue').value || '2026-12-31';
-                const reqUrl = document.getElementById('mProjReq').value.trim();
-                const agendaUrl = document.getElementById('mProjAgenda').value.trim();
-                const cueUrl = document.getElementById('mProjCue').value.trim();
-                const pmsUrl = document.getElementById('mProjPms').value.trim();
-
-                if (isEdit) {
-                    existingProj.name = name;
-                    existingProj.targetArticles = targetArticles;
-                    existingProj.targetFlexComments = targetFlexComments;
-                    existingProj.targetLikesQuota = targetLikesQuota;
-                    existingProj.customQuotas = updatedCustomQuotas;
-                    existingProj.dueDate = dueDate;
-                    existingProj.reqUrl = reqUrl;
-                    existingProj.agendaUrl = agendaUrl;
-                    existingProj.cueUrl = cueUrl;
-                    existingProj.pmsUrl = pmsUrl;
-                    existingProj.extraLinks = updatedExtraLinks;
-                    syncProjectArticlesToCalendar();
-                } else {
-                    const newId = 'proj_' + Date.now();
-                    appState.projects.push({
-                        id: newId,
-                        name,
-                        targetArticles,
-                        targetFlexComments,
-                        targetLikesQuota,
-                        customQuotas: updatedCustomQuotas,
-                        dueDate,
-                        reqUrl,
-                        agendaUrl,
-                        cueUrl,
-                        pmsUrl,
-                        extraLinks: updatedExtraLinks,
-                        articles: [],
-                        flexCommentLogs: [],
-                        likeUsageLogs: [],
-                        projectNotes: []
-                    });
-                    appState.currentProjectId = newId;
-                }
-                saveState();
-                closeCustomModal();
-                showToast(isEdit ? '專案設定已更新' : '新專案已建立');
-            };
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function appendNewProjLinkRow() {
-            const container = document.getElementById('mProjExtraLinksContainer');
-            if (!container) return;
-            const row = document.createElement('div');
-            row.className = 'extra-link-row flex items-center gap-2';
-            row.innerHTML = `
-                <input type="text" placeholder="連結名稱" class="extra-link-label w-1/3 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                <input type="url" placeholder="https://..." class="extra-link-url flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1.5 font-bold">✕</button>
-            `;
-            container.appendChild(row);
-        }
-
-        function appendNewProjCustomQuotaRow() {
-            const container = document.getElementById('mProjCustomQuotasContainer');
-            if (!container) return;
-            const row = document.createElement('div');
-            row.className = 'custom-quota-row flex items-center gap-2';
-            row.innerHTML = `
-                <input type="text" placeholder="項目名稱" class="custom-quota-name w-1/2 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                <input type="text" placeholder="目標數量/規格" class="custom-quota-target flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5">
-                <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-rose-600 px-1.5 font-bold">✕</button>
-            `;
-            container.appendChild(row);
-        }
-
-        function openAddProjectLinkModal() {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) { showToast('請先選擇專案'); return; }
-            const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = `新增專案快速連結 — ${proj.name}`;
-            document.getElementById('customModalBody').innerHTML = `
-                <div class="space-y-3">
-                    <div><label class="block font-semibold mb-1">連結名稱 *</label><input id="mExtraLinkLabel" type="text" placeholder="例如：客戶品牌素材雲端" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div><label class="block font-semibold mb-1">網址 URL *</label><input id="mExtraLinkUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                </div>
-            `;
-            const btn = document.getElementById('customModalConfirmBtn');
-            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = '新增連結';
-            btn.onclick = () => {
-                const label = document.getElementById('mExtraLinkLabel').value.trim();
-                const url = document.getElementById('mExtraLinkUrl').value.trim();
-                if (!label || !url) { showToast('請填寫連結名稱與網址'); return; }
-                proj.extraLinks = proj.extraLinks || [];
-                proj.extraLinks.push({ label, url });
-                saveState();
-                closeCustomModal();
-                showToast('已新增專案連結');
-            };
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function removeProjectExtraLink(idx) {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj || !Array.isArray(proj.extraLinks)) return;
-            proj.extraLinks.splice(idx, 1);
-            saveState();
-            showToast('已移除連結');
-        }
-
-        // ==================== 新增與編輯文章彈窗 ====================
-        function openNewArticleModal() {
-            openArticleFormModal(null);
-        }
-
-        function openEditArticleModal(artId) {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) return;
-            const art = (proj.articles || []).find(a => a.id === artId);
-            if (!art) return;
-            openArticleFormModal(art);
-        }
-
-        function openArticleFormModal(existing) {
-            const proj = appState.projects.find(p => p.id === appState.currentProjectId);
-            if (!proj) { showToast('請先建立並選擇一個專案'); return; }
-            const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = existing ? `編輯文章 — ${existing.code}` : `新增文章 — ${proj.name}`;
-
-            const resolvedSpec = existing ? findMatchedContractSpec(existing) : null;
-            const initSpecId = existing ? (resolvedSpec ? resolvedSpec.id : '') : (appState.contractSpecs?.[0]?.id || '');
-
-            document.getElementById('customModalBody').innerHTML = `
-                <div class="space-y-3">
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">文章編號 *</label><input id="mArtCode" type="text" value="${escapeHtml(existing?.code || 'ART-' + ((proj.articles?.length || 0) + 1))}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">預計上線月 (如 2611)</label><input id="mArtExpMonth" type="text" value="${escapeHtml(existing?.expectedMonth || '')}" placeholder="例如：2611" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div><label class="block font-semibold mb-1">項目 *</label><input id="mArtItem" type="text" value="${escapeHtml(existing?.item || '')}" placeholder="例如：Threads矩陣推廣" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">平台</label><input id="mArtPlatform" type="text" value="${escapeHtml(existing?.platform || '')}" placeholder="Threads / Dcard" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">內容類型</label><input id="mArtContentType" type="text" value="${escapeHtml(existing?.contentType || existing?.category || '')}" placeholder="一般文 / 矩陣" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1 text-purple-700">✏️ 切角（手動輸入文字）</label>
-                        <input id="mArtAngle" type="text" value="${escapeHtml(existing?.angle || '')}" placeholder="例如：小資族必買開箱實測 / 痛點比較切角" class="w-full border border-purple-200 bg-purple-50/20 rounded-lg px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1 text-blue-700">對應客戶成效規格 (選「Threads矩陣20篇 / 50篇」將自動展開對應子文章)</label>
-                        <select id="mArtSpec" class="w-full border border-blue-200 bg-blue-50/30 rounded-lg px-3 py-2">${renderContractSpecSelectOptions(initSpecId)}</select>
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1">實際上線日期 (填寫後將自動同步至月曆)</label>
-                        <input id="mArtDate" type="date" value="${escapeHtml(existing?.publishDate || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2">
-                    </div>
-                    <div class="grid grid-cols-4 gap-2">
-                        <div><label class="block font-semibold mb-1">👁️ 瀏覽(PV)</label><input id="mArtPv" type="number" min="0" value="${existing?.pv ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                        <div><label class="block font-semibold mb-1">❤️ 愛心</label><input id="mArtLikes" type="number" min="0" value="${existing?.likes ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                        <div><label class="block font-semibold mb-1">💬 留言</label><input id="mArtComments" type="number" min="0" value="${existing?.comments ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                        <div><label class="block font-semibold mb-1">🔁 分享/轉發</label><input id="mArtShares" type="number" min="0" value="${existing?.shares ?? 0}" class="w-full border border-slate-200 rounded-lg px-2.5 py-2"></div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div><label class="block font-semibold mb-1 text-blue-700">客戶留言</label><input id="mArtClientComments" type="number" min="0" value="${existing?.clientComments ?? 0}" class="w-full border border-blue-200 bg-blue-50/20 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1 text-slate-600">暗樁留言</label><input id="mArtShillComments" type="number" min="0" value="${existing?.shillComments ?? 0}" class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1 text-purple-700">彈性留言(計入)</label><input id="mArtFlexComments" type="number" min="0" value="${existing?.flexCommentsUsed ?? 0}" class="w-full border border-purple-200 bg-purple-50/20 rounded-lg px-3 py-2"></div>
-                    </div>
-                    <div>
-                        <label class="block font-semibold mb-1">完成連結 (URL)</label>
-                        <input id="mArtUrl" type="url" value="${escapeHtml(existing?.completedUrl || '')}" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2">
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div class="col-span-2">
-                            <label class="block font-semibold mb-1 text-emerald-700">內部 KPI 標準規則</label>
-                            <select id="mArtKpiRule" class="w-full border border-emerald-200 bg-emerald-50/20 rounded-lg px-3 py-2">${renderKpiRuleSelectOptions(existing?.kpiRuleKey || 'standard:0')}</select>
-                        </div>
-                        <div>
-                            <label class="block font-semibold mb-1">核對獎金 ($)</label>
-                            <input id="mArtBonus" type="number" min="0" value="${existing?.bonus ?? 0}" class="w-full border border-slate-200 rounded-lg px-3 py-2 font-bold text-emerald-700">
-                        </div>
-                    </div>
-                </div>
-            `;
-            const btn = document.getElementById('customModalConfirmBtn');
-            btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = existing ? '儲存修改' : '儲存文章';
-            btn.onclick = () => {
-                const code = document.getElementById('mArtCode').value.trim();
-                const itemVal = document.getElementById('mArtItem').value.trim();
-                if (!code || !itemVal) { showToast('請填寫文章編號與項目'); return; }
-                const selectedSpecId = document.getElementById('mArtSpec').value;
-                const platformVal = document.getElementById('mArtPlatform').value.trim();
-                const contentTypeVal = document.getElementById('mArtContentType').value.trim();
-
-                let specObj = (appState.contractSpecs || []).find(s => s.id === selectedSpecId);
-                let isManualLock = !!selectedSpecId;
-                if (!specObj) {
-                    specObj = autoDetectContractSpecForArticle({
-                        specName: existing?.specName || '',
-                        item: itemVal,
-                        platform: platformVal,
-                        contentType: contentTypeVal,
-                        category: contentTypeVal
-                    });
-                    isManualLock = false;
-                }
-                const kpiRuleKey = document.getElementById('mArtKpiRule').value;
-                const artData = {
-                    id: existing?.id || ('art_' + Date.now()),
-                    code,
-                    expectedMonth: document.getElementById('mArtExpMonth').value.trim(),
-                    item: itemVal,
-                    angle: document.getElementById('mArtAngle').value.trim(),
-                    platform: platformVal,
-                    specId: specObj ? specObj.id : '',
-                    specName: specObj ? specObj.name : (existing?.specName || ''),
-                    specManualLock: isManualLock,
-                    contentType: contentTypeVal,
-                    category: contentTypeVal,
-                    publishDate: document.getElementById('mArtDate').value,
-                    pv: Number(document.getElementById('mArtPv').value) || 0,
-                    likes: Number(document.getElementById('mArtLikes').value) || 0,
-                    comments: Number(document.getElementById('mArtComments').value) || 0,
-                    shares: Number(document.getElementById('mArtShares').value) || 0,
-                    clientComments: Number(document.getElementById('mArtClientComments').value) || 0,
-                    shillComments: Number(document.getElementById('mArtShillComments').value) || 0,
-                    flexCommentsUsed: Number(document.getElementById('mArtFlexComments').value) || 0,
-                    completedUrl: document.getElementById('mArtUrl').value.trim(),
-                    kpiRuleKey,
-                    bonus: Number(document.getElementById('mArtBonus').value) || 0,
-                    subArticles: existing?.subArticles
-                };
-
-                const matrixCnt = detectMatrixTargetCount(artData, specObj);
-                if (matrixCnt > 0) {
-                    ensureMatrixSubArticles(artData, matrixCnt);
-                    expandedMatrixGroups.add(artData.id);
-                    if (!kpiRuleKey || kpiRuleKey === 'none') {
-                        artData.kpiRuleKey = 'matrix:all';
-                    }
-                }
-
-                if (artData.kpiRuleKey && artData.kpiRuleKey !== 'none') {
-                    artData.bonus = computeArticleBonus(artData).bonus;
-                }
-                proj.articles = proj.articles || [];
-                if (existing) Object.assign(existing, artData);
-                else proj.articles.push(artData);
-
-                syncProjectArticlesToCalendar();
-                saveState();
-                closeCustomModal();
-                showToast(
-                    matrixCnt > 0
-                        ? `已建立並自動展開 ${matrixCnt} 篇矩陣子文章明細！`
-                        : (existing ? '文章已更新並同步月曆' : '已新增文章並同步至月曆')
-                );
-            };
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+                `).join('') || '<div class="text-center py-6 text-slate-400">尚無帳號廠商發包紀錄</div>';
+            }
         }
 
         function openWriterModal() {
-            const projectsList = getProjectsList();
-            const currentProjObj = (appState.projects || []).find(p => p.id === appState.currentProjectId);
-            const defaultProjName = currentProjObj ? currentProjObj.name : (projectsList[0] || '');
-            const defaultMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-
+            const projects = getProjectsList();
             const modal = document.getElementById('customModalBackdrop');
             document.getElementById('customModalTitle').textContent = '新增派案寫手紀錄（同步建立行事曆卡片）';
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div>
-                        <label class="block font-semibold mb-1">專案 *</label>
-                        <select id="mWrProj" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white">
-                            ${projectsList.map(p => `<option value="${escapeHtml(p)}" ${p === defaultProjName ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}
-                        </select>
-                    </div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block font-semibold mb-1">月份 *</label>
-                            <input id="mWrMonth" type="month" value="${defaultMonthStr}" class="w-full border border-slate-200 rounded-lg px-3 py-2">
-                        </div>
-                        <div>
-                            <label class="block font-semibold mb-1">類型 *</label>
-                            <select id="mWrWorkType" class="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white">
-                                <option value="文章">文章</option>
-                                <option value="企劃">企劃</option>
-                            </select>
-                        </div>
+                        <div><label class="block font-semibold mb-1">寫手名稱 *</label><input id="mWriterName" type="text" placeholder="例如：寫手小陳" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">所屬專案 *</label><input id="mWriterProj" list="writerProjList" value="${escapeHtml((appState.projects.find(p => p.id === appState.currentProjectId)?.name) || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"><datalist id="writerProjList">${projects.map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist></div>
                     </div>
+                    <div><label class="block font-semibold mb-1">派案篇名 / 主題 *</label><input id="mWriterTopic" type="text" placeholder="例如：秋季保養實測心得文" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block font-semibold mb-1">寫手名稱 *</label>
-                            <input id="mWrName" type="text" placeholder="例如：小美" class="w-full border border-slate-200 rounded-lg px-3 py-2">
-                        </div>
-                        <div>
-                            <label class="block font-semibold mb-1">回稿日期（同步顯示於月曆） *</label>
-                            <input id="mWrDue" type="date" value="${new Date().toISOString().slice(0, 10)}" class="w-full border border-slate-200 rounded-lg px-3 py-2">
-                        </div>
+                        <div><label class="block font-semibold mb-1">回稿日期 *</label><input id="mWriterDue" type="date" value="${new Date().toISOString().slice(0, 10)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">回稿時間 *</label><input id="mWriterDueTime" type="text" placeholder="例如：18:00" value="18:00" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                     </div>
                 </div>
             `;
             const btn = document.getElementById('customModalConfirmBtn');
             btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = '儲存並同步至行事曆';
+            btn.textContent = '確認派案';
             btn.onclick = () => {
-                const project = document.getElementById('mWrProj').value.trim();
-                const month = document.getElementById('mWrMonth').value.trim();
-                const workType = document.getElementById('mWrWorkType').value;
-                const writer = document.getElementById('mWrName').value.trim();
-                const due = document.getElementById('mWrDue').value;
-                if (!project || !writer || !due) { showToast('請填寫專案、寫手名稱與回稿日期'); return; }
+                const writerName = document.getElementById('mWriterName').value.trim();
+                const project = document.getElementById('mWriterProj').value.trim();
+                const topic = document.getElementById('mWriterTopic').value.trim();
+                const dueDate = document.getElementById('mWriterDue').value;
+                const dueTime = document.getElementById('mWriterDueTime').value.trim();
+                if (!writerName || !project || !topic || !dueDate) { showToast('請完整填寫寫手名稱、專案、主題與回稿日期'); return; }
+                const wId = 'wr_' + Date.now();
+                const calCardKey = 'cc_wr_' + wId;
+                const timeDisplay = dueTime || '全日';
 
-                const writerId = 'wr_' + Date.now();
-                const calCardKey = 'cc_wr_' + Date.now();
+                // 規則 5：同步新增月曆卡片，格式為「派案寫手 派案 寫手名稱 專案 回稿時間」，新增在回稿日那天
+                const syncedTaskTitle = `派案寫手 派案 ${writerName} ${project} ${timeDisplay}`.trim();
 
                 appState.writers = appState.writers || [];
-                appState.writers.push({
-                    id: writerId,
-                    project,
-                    month,
-                    workType,
-                    writer,
-                    due,
-                    done: false,
-                    calCardKey
-                });
+                appState.writers.unshift({ id: wId, writerName, project, topic, dueDate, dueTime, done: false, calCardKey });
 
                 appState.calendarCards = appState.calendarCards || [];
                 appState.calendarCards.push({
                     key: calCardKey,
-                    id: 'WR-' + Math.floor(Math.random() * 900 + 100),
-                    date: due,
+                    id: 'WR-' + String(appState.writers.length).padStart(2, '0'),
+                    date: dueDate,
                     project,
                     type: '寫手回稿',
-                    task: `[寫手回稿] ${writer} — ${workType} (${month || due.slice(0, 7)})`,
+                    task: syncedTaskTitle,
                     cue: '',
-                    time: '',
-                    stage: `${month ? month + ' · ' : ''}${workType}`,
-                    note: `派案寫手：${writer}｜類型：${workType}｜回稿日期：${due}`,
+                    time: dueTime,
+                    stage: '寫手回稿日',
+                    note: `派案主題：${topic}｜寫手：${writerName}｜專案：${project}｜回稿時間：${dueDate} ${timeDisplay}`,
                     change: '由派案寫手進度追蹤自動同步建立',
                     done: false
                 });
-
                 saveState();
                 closeCustomModal();
-                showToast('已新增寫手派稿並同步建立行事曆排程卡片');
+                showToast(`已新增派案並同步新增月曆卡片至回稿日 (${dueDate})`);
             };
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
+        window.openWriterModal = openWriterModal;
+
+        function toggleWriterDone(id) {
+            const w = (appState.writers || []).find(x => x.id === id);
+            if (w) {
+                w.done = !w.done;
+                if (w.calCardKey) {
+                    const card = (appState.calendarCards || []).find(c => c.key === w.calCardKey);
+                    if (card) card.done = w.done;
+                }
+                saveState();
+            }
+        }
+        window.toggleWriterDone = toggleWriterDone;
+
+        function deleteSingleWriter(id) {
+            const target = (appState.writers || []).find(x => x.id === id);
+            if (target?.calCardKey) {
+                appState.calendarCards = (appState.calendarCards || []).filter(c => c.key !== target.calCardKey);
+            }
+            appState.writers = (appState.writers || []).filter(x => x.id !== id);
+            selectedMap.writers.delete(id);
+            saveState();
+            showToast('已刪除派稿紀錄');
+        }
+        window.deleteSingleWriter = deleteSingleWriter;
 
         function openVendorModal() {
+            const projects = getProjectsList();
             const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = '新增帳號廠商發包紀錄';
+            document.getElementById('customModalTitle').textContent = '新增帳號廠商上線發包紀錄';
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="mVdProj" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><label class="block font-semibold mb-1">編號 *</label><input id="mVdCode" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                        <div><label class="block font-semibold mb-1">單號 *</label><input id="mVdOrder" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">廠商名稱 *</label><input id="mVendorName" type="text" placeholder="例如：星辰數位" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                        <div><label class="block font-semibold mb-1">所屬專案 *</label><input id="mVendorProj" list="vendorProjList" value="${escapeHtml((appState.projects.find(p => p.id === appState.currentProjectId)?.name) || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"><datalist id="vendorProjList">${projects.map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist></div>
                     </div>
-                    <div><label class="block font-semibold mb-1">預計上線日期</label><input id="mVdDate" type="date" value="${new Date().toISOString().slice(0, 10)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">發包規格 / 內容 *</label><input id="mVendorItem" type="text" placeholder="例如：Threads 矩陣 20 篇發包" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">預計上線日</label><input id="mVendorDate" type="date" value="${new Date().toISOString().slice(0, 10)}" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                 </div>
             `;
             const btn = document.getElementById('customModalConfirmBtn');
             btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = '儲存發包';
+            btn.textContent = '確認新增';
             btn.onclick = () => {
-                const project = document.getElementById('mVdProj').value.trim();
-                const code = document.getElementById('mVdCode').value.trim();
-                const orderId = document.getElementById('mVdOrder').value.trim();
-                if (!project || !code || !orderId) { showToast('請填寫完整欄位'); return; }
+                const vendorName = document.getElementById('mVendorName').value.trim();
+                const project = document.getElementById('mVendorProj').value.trim();
+                const item = document.getElementById('mVendorItem').value.trim();
+                const launchDate = document.getElementById('mVendorDate').value;
+                if (!vendorName || !project || !item) { showToast('請完整填寫廠商名稱、專案與發包規格'); return; }
                 appState.vendors = appState.vendors || [];
-                appState.vendors.push({ id: 'vd_' + Date.now(), project, code, orderId, date: document.getElementById('mVdDate').value, confirmed: false });
+                appState.vendors.unshift({ id: 'vd_' + Date.now(), vendorName, project, item, launchDate, done: false });
                 saveState();
                 closeCustomModal();
-                showToast('已新增帳號廠商發包');
+                showToast('已新增帳號廠商發包紀錄');
             };
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+        }
+        window.openVendorModal = openVendorModal;
+
+        function toggleVendorDone(id) {
+            const v = (appState.vendors || []).find(x => x.id === id);
+            if (v) { v.done = !v.done; saveState(); }
+        }
+        window.toggleVendorDone = toggleVendorDone;
+
+        function deleteSingleVendor(id) {
+            appState.vendors = (appState.vendors || []).filter(x => x.id !== id);
+            selectedMap.vendors.delete(id);
+            saveState();
+            showToast('已刪除廠商紀錄');
+        }
+        window.deleteSingleVendor = deleteSingleVendor;
+
+        function renderHotArticles() {
+            const container = document.getElementById('hotArticlesListContainer');
+            if (!container) return;
+            const list = appState.hotArticles || [];
+            container.innerHTML = list.map(h => `
+                <div class="p-3.5 rounded-xl border border-slate-100 hover:bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label class="flex items-start gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" ${selectedMap.hotArticles.has(h.id) ? 'checked' : ''} onchange="toggleSelectItem('hotArticles', '${h.id}', this.checked)" class="rounded text-rose-600 mt-0.5">
+                        <div class="min-w-0">
+                            <div class="font-bold text-slate-900">${escapeHtml(h.project)} · <span class="text-amber-700">${escapeHtml(h.platform)}</span></div>
+                            <div class="text-xs text-slate-700 mt-0.5">${escapeHtml(h.title)}</div>
+                            ${h.url ? `<a href="${escapeHtml(h.url)}" target="_blank" class="text-[11px] text-blue-700 hover:underline inline-flex items-center gap-1 mt-1">檢視貼文 <i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
+                        </div>
+                    </label>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="toggleHotArticleStatus('${h.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${h.status === '已置入上線' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">${escapeHtml(h.status || '待客戶審核')}</button>
+                        <button onclick="deleteSingleHotArticle('${h.id}')" class="text-rose-600 hover:underline text-xs">刪除</button>
+                    </div>
+                </div>
+            `).join('') || '<div class="text-center py-8 text-slate-400">尚無熱門貼文追蹤紀錄</div>';
         }
 
         function openHotArticleModal() {
+            const projects = getProjectsList();
             const modal = document.getElementById('customModalBackdrop');
-            document.getElementById('customModalTitle').textContent = '新增熱門文章搜尋追蹤';
+            document.getElementById('customModalTitle').textContent = '新增熱門文章追蹤';
             document.getElementById('customModalBody').innerHTML = `
                 <div class="space-y-3">
-                    <div><label class="block font-semibold mb-1">專案名稱 *</label><input id="mHaProj" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div><label class="block font-semibold mb-1">貼文標題 *</label><input id="mHaTitle" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
-                    <div><label class="block font-semibold mb-1">貼文連結</label><input id="mHaUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block font-semibold mb-1">所屬專案 *</label><input id="mHotProj" list="hotProjList" value="${escapeHtml((appState.projects.find(p => p.id === appState.currentProjectId)?.name) || '')}" class="w-full border border-slate-200 rounded-lg px-3 py-2"><datalist id="hotProjList">${projects.map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist></div>
+                        <div><label class="block font-semibold mb-1">平台 *</label><input id="mHotPlatform" type="text" value="Threads / Dcard" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    </div>
+                    <div><label class="block font-semibold mb-1">熱門貼文標題 / 關鍵字 *</label><input id="mHotTitle" type="text" placeholder="例如：討論度最高的保濕精華推薦" class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
+                    <div><label class="block font-semibold mb-1">貼文網址 (URL)</label><input id="mHotUrl" type="url" placeholder="https://..." class="w-full border border-slate-200 rounded-lg px-3 py-2"></div>
                 </div>
             `;
             const btn = document.getElementById('customModalConfirmBtn');
             btn.className = 'px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-medium hover:bg-blue-800';
-            btn.textContent = '儲存追蹤';
+            btn.textContent = '新增貼文';
             btn.onclick = () => {
-                const project = document.getElementById('mHaProj').value.trim();
-                const title = document.getElementById('mHaTitle').value.trim();
+                const project = document.getElementById('mHotProj').value.trim();
+                const platform = document.getElementById('mHotPlatform').value.trim();
+                const title = document.getElementById('mHotTitle').value.trim();
+                const url = document.getElementById('mHotUrl').value.trim();
                 if (!project || !title) { showToast('請填寫專案與貼文標題'); return; }
                 appState.hotArticles = appState.hotArticles || [];
-                appState.hotArticles.push({ id: 'ha_' + Date.now(), project, title, url: document.getElementById('mHaUrl').value.trim() || '#', wedStatus: '待確認', friStatus: '待上線' });
+                appState.hotArticles.unshift({ id: 'hot_' + Date.now(), project, platform: platform || 'Threads', title, url, status: '待客戶審核' });
                 saveState();
                 closeCustomModal();
-                showToast('已新增熱門貼文');
+                showToast('已新增熱門貼文追蹤');
             };
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
+        window.openHotArticleModal = openHotArticleModal;
 
-        window.addEventListener('DOMContentLoaded', async () => {
+        function toggleHotArticleStatus(id) {
+            const h = (appState.hotArticles || []).find(x => x.id === id);
+            if (!h) return;
+            const order = ['待客戶審核', '審核通過待置入', '已置入上線'];
+            const next = order[(order.indexOf(h.status) + 1) % order.length];
+            h.status = next;
+            saveState();
+        }
+        window.toggleHotArticleStatus = toggleHotArticleStatus;
+
+        function deleteSingleHotArticle(id) {
+            appState.hotArticles = (appState.hotArticles || []).filter(x => x.id !== id);
+            selectedMap.hotArticles.delete(id);
+            saveState();
+            showToast('已刪除熱門貼文紀錄');
+        }
+        window.deleteSingleHotArticle = deleteSingleHotArticle;
+
+        // ==================== 初始化啟動 ====================
+        window.onload = async function () {
+            try { window.lucide?.createIcons?.(); } catch (e) {}
             renderAll();
             if (typeof window.initCloudSync === 'function') {
                 await window.initCloudSync();
             }
-            renderAll();
-            try { lucide.createIcons(); } catch(e) {}
-        });
+        };
     </script>
 </body>
 </html>
